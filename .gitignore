@@ -1,0 +1,48 @@
+# IDE / Editors
+.vscode
+.vscode-server
+.vs
+.devcontainer
+.ssh
+.idea
+*.sublime-project
+*.sublime-workspace
+*.ipynb_checkpoints
+ 
+*.cache
+
+# Configuration, secrets, etc:
+.env
+
+
+# Local data files
+pipeline/data/*
+ 
+ 
+#!pipeline/data/README.md
+#!pipeline/data/trigger_data
+
+# Generated files
+dist
+coverage
+
+
+# External code
+node_modules
+
+
+# Logs / Cache / temporary files
+logs
+*.log
+npm-debug.log*
+.npm
+
+# Secrets
+pipeline/lib/drought_model/secrets.py
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb
