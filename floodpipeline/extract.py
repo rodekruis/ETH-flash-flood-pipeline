@@ -242,6 +242,7 @@ class Extract:
                             hybasid=data_unit.hybasid,
                             hybalevel=data_unit.hybalevel,
                             lead_time=lead_time,
+                            pcodes=data_unit.pcodes,
                             rainfall_ensemble=[max_value] if not pd.isna(max_value) else [0.0],
                             )
                         )  
