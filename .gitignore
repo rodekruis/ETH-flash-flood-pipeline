@@ -20,7 +20,9 @@ pipeline/data/*
  
  
 #!pipeline/data/README.md
-#!pipeline/data/trigger_data
+#!pipeline/data/
+pipeline/static data/*
+
 
 # Generated files
 dist

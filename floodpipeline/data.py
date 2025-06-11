@@ -1,5 +1,7 @@
 from datetime import datetime
-from typing import List, TypedDict
+from typing import List, TypedDict,Dict, Optional
+
+
 from floodpipeline.settings import Settings
 from floodpipeline.secrets import Secrets
 
@@ -19,7 +21,7 @@ class StationDataUnit:
         self.station_code: str = kwargs.get("station_code")
         self.station_name: str = kwargs.get("station_name")
         self.lat: float = kwargs.get("lat")
-        self.lon: float = kwargs.get("lon")
+        self.lon: float = kwargs.get("lon")    
         self.pcodes: dict = kwargs.get(
             "pcodes"
         )  # pcodes of associated administrative divisions
@@ -32,7 +34,8 @@ class BasinDataUnit:
     def __init__(self, **kwargs):
         self.hybasid: str = kwargs.get("hybasid")
         self.hybalevel: int = kwargs.get("hybalevel")
-        self.pcodes: List[str] = kwargs.get("pcodes", None)
+        self.pcodes: Optional[dict] = kwargs.get("pcodes")
+        #self.lead_time: Optional[int] = kwargs.get("lead_time", None)
 
 class DischargeDataUnit(AdminDataUnit):
     """River discharge data unit"""
@@ -78,15 +81,17 @@ class RainfallBasinDataUnit(BasinDataUnit):
         self.lead_time: float = kwargs.get("lead_time")
         self.rainfall_ensemble: List[float] = kwargs.get("rainfall_ensemble", [])
         self.rainfall_mean: float = kwargs.get("rainfall_mean", None)
-        self.hybalevel: int = self.select_hydrobasins_levle(self.lead_time)
+        #self.hybasid: str = kwargs.get("hybasid")
+        #self.hybalevel: int = kwargs.get("hybalevel")
+        #self.hybalevel: int = self.select_hydrobasins_levle(self.lead_time)
         if self.rainfall_ensemble:
             self.compute_mean()
 
     def compute_mean(self):
         """Compute mean rainfall"""
         self.rainfall_mean = sum(self.rainfall_ensemble) / len(self.rainfall_ensemble)
-
-    @staticmethod
+        
+    '''
     def select_hydrobasins_levle(lead_time: float) -> int:
         """
         the rainfall forecast data has different skill level based on the lead time.
@@ -104,6 +109,8 @@ class RainfallBasinDataUnit(BasinDataUnit):
             return {9: [1090830330, 1090830320]}
         else:
             return {10: [1100830840, 1100830330, 1100831050, 1100833680]}
+'''
+
 
 
 class FloodForecast(TypedDict):
@@ -460,6 +467,11 @@ class PipelineDataSets:
             adm_levels=settings.get_country_setting(country, "admin-levels"),
         )
         self.forecast_station = StationDataSet(
+            country=self.country, 
+            timestamp=datetime.today()
+        )
+
+        self.forecast_basin = BasinDataSet(
             country=self.country, 
             timestamp=datetime.today()
         )

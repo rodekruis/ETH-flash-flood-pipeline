@@ -7,6 +7,8 @@
 *.sublime-project
 *.sublime-workspace
 pipeline/data/*
+pipeline/static data/*
+
 
 # Configuration, secrets, etc:
 .env

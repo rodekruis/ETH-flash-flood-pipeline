@@ -38,6 +38,11 @@ import shutil
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError
 
+from ftplib import FTP_TLS
+import os
+import re
+
+
 
 
 COSMOS_DATA_TYPES = [
@@ -89,6 +94,16 @@ def get_cosmos_query(
 
 
 
+
+
+
+
+
+ 
+
+
+
+
 def get_data_unit_id(data_unit: AdminDataUnit, dataset: AdminDataSet):
     """Get data unit ID"""
     if hasattr(data_unit, "pcode"):
@@ -126,6 +141,19 @@ def alert_class_to_threshold(alert_class: str, triggered: bool) -> float:
             return 0.7
     else:
         raise ValueError(f"Invalid alert class {alert_class}")
+
+
+def forecast_trigger_status(triggered: bool, trigger_class: str):
+    """determine if forecast is a trigger for IBF portal if trigger status is true and trigger activation is enabled in config file the 
+        trigger staus will be 1 , else 0"""
+    if triggered:
+        if trigger_class == "enabled":
+            return 1
+        else:
+            return 0
+    else:
+        return 0 
+
 
 
 class Load:
@@ -166,10 +194,98 @@ class Load:
         )
         self.secrets = secrets
 
+    
+
+    def download_forecast_file(self,
+        base_dir: str,
+        target_datetime: datetime,
+        save_path: str,
+    ):
+        """
+        Downloads the latest available file from Deltares FTPS server based on the file pattern and timestamp.
+        Args:
+            base_dir (str): Root directory on the server, e.g., "Hydrology"
+            file_pattern (str): Substring in the file name to match (e.g., "floodmap")
+            target_datetime (datetime): Date and time to locate the file folder
+            save_path (str): Local path to save the downloaded file
+        """
+        timestamp_pattern = r'\d{8}T\d{6}'  # Matches the format YYYYMMDDTHHMMSS
+
+        host = self.secrets.get_secret("DELTARES_FTP_URL")
+        ftps = FTP_TLS()
+        ftps.connect(host=host, port=21)  # Explicitly specify port  
+
+        ftps.login(
+            user=self.secrets.get_secret("DELTARES_FTP_USER"),
+            passwd=self.secrets.get_secret("DELTARES_FTP_PASSWORD")
+        )
+
+        ftps.prot_p()  # Switch to secure data connection
+
+        subfolder = target_datetime.strftime("%Y%m%d")
+        folder_path = f"/{base_dir}/{subfolder}"
+
+        logging.info(f"Navigating to {folder_path}")
+        try:
+            ftps.cwd(folder_path)
+            files = ftps.nlst()
+
+            # Filter files by the given pattern (case insensitive)
+            target_files = files #[f for f in files if file_pattern.lower() in f.lower()]
+
+            if not target_files:
+                logging.warning(f"No files found")
+                return
+
+            # Sort files based on timestamp (latest first)
+            target_files.sort(reverse=True)
+
+            # The most recent file is the first in the sorted list
+            most_recent_file = target_files[0]
+            logging.info(f"Most recent file found: {most_recent_file}")
+
+            # Split the filename and extract the timestamp
+            parts = most_recent_file.split('_')
+            timestamps = [part for part in parts if re.match(timestamp_pattern, part)]
+
+            if not timestamps:
+                logging.warning(f"No valid timestamp found in filename: {most_recent_file}")
+                return
+            
+            # Use the first timestamp found in the filename
+            timestamp = timestamps[0]
+            logging.info(f"Extracted timestamp: {timestamp}")
+
+            # Filter files by the extracted timestamp
+            update_target_files = [f for f in files if timestamp in f]
+
+            if not update_target_files:
+                logging.warning(f"No files found with the extracted timestamp {timestamp}")
+                return
+
+            for file in update_target_files:
+                logging.info(f"Found file matching timestamp: {file}")
+
+                local_file_path = os.path.join(save_path, file)
+                logging.warning(f"Downloading latest file: {file} to {local_file_path}...")
+
+                with open(local_file_path, 'wb') as f:
+                    ftps.retrbinary(f"RETR {file}", f.write)
+
+                logging.info("Download complete.")
+
+        except Exception as e:
+            logging.warning(f"Failed to download: {e}")
+        finally:
+            ftps.quit()
+
+
+
     def get_population_density(self, country: str, file_path: str):
         """Get population density data from worldpop and save to file_path"""
         r = requests.get(
-            f"{self.settings.get_setting('worldpop_url')}/{country.upper()}/{country.lower()}_ppp_2022_1km_UNadj_constrained.tif"
+            f"{self.settings.get_setting('worldpop_url')}/{country.upper()}/{country.lower()}_ppp_2020_UNadj_constrained.tif" 
+            #f"{self.settings.get_setting('worldpop_url')}/{country.upper()}/{country.lower()}_ppp_2022_1km_UNadj_constrained.tif"
         )
         if "404 Not Found" in str(r.content):
             raise FileNotFoundError(
@@ -329,6 +445,10 @@ class Load:
             data_type="threshold-station", country=country
         )
 
+        disasterType= self.settings.get_setting('disaster_type')  # "flash-floods"
+        pipeline_will_trigger_portal = self.settings.get_country_setting(country, "pipeline-will-trigger-portal") 
+
+
         processed_stations, processed_pcodes, triggered_lead_times = [], [], []
 
         # START EVENT LOOP
@@ -377,8 +497,10 @@ class Load:
                 # send exposure data: admin-area-dynamic-data/exposure
                 indicators = [
                     "population_affected",
-                    "population_affected_percentage",
-                    "alert_threshold",
+                    #"population_affected_percentage",
+                    #"alert_threshold",
+                    "forecast_trigger",
+                    "forecast_severity",
                 ]
                 for indicator in indicators:
                     for adm_level in forecast_station.pcodes.keys():
@@ -392,13 +514,16 @@ class Load:
                                 amount = forecast_admin.pop_affected
                             elif indicator == "population_affected_percentage":
                                 amount = forecast_admin.pop_affected_perc
-                            elif indicator == "alert_threshold":
-                                amount = alert_class_to_threshold(
-                                    alert_class=forecast_admin.alert_class,
-                                    triggered=(
-                                        True if event_type == "trigger" else False
-                                    ),
-                                )
+                            elif indicator == "forecast_severity":
+                                amount =forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                            elif indicator == "forecast_trigger":
+                                amount = forecast_trigger_status(
+                                    triggered=(True if event_type == "trigger" else False),
+                                    #triggered= (forecast_admin.triggered > 0),# True if event_type == "trigger" else False   ),
+                                    trigger_class=pipeline_will_trigger_portal,
+                                    )
+                            #elif indicator == "alert_threshold":
+                            #    amount = alert_class_to_threshold(alert_class=forecast_admin.alert_class, triggered=(True if event_type == "trigger" else False),)
                             exposure_pcodes.append(
                                 {"placeCode": pcode, "amount": amount}
                             )
@@ -409,7 +534,7 @@ class Load:
                             "dynamicIndicator": indicator,
                             "adminLevel": int(adm_level),
                             "exposurePlaceCodes": exposure_pcodes,
-                            "disasterType": "floods",
+                            "disasterType": disasterType,
                             "eventName": event_name,
                             "date": upload_time,
                         }
@@ -514,8 +639,10 @@ class Load:
         if len(processed_pcodes) == 0:
             indicators = [
                 "population_affected",
-                "population_affected_percentage",
-                "alert_threshold",
+                #"population_affected_percentage",
+                #"alert_threshold",
+                "forecast_trigger",
+                "forecast_severity",
             ]
             for indicator in indicators:
                 for adm_level in forecast_data.adm_levels:
@@ -527,6 +654,10 @@ class Load:
                                 amount = 0
                             elif indicator == "population_affected_percentage":
                                 amount = 0.0
+                            elif indicator == "forecast_trigger":
+                                amount = 0
+                            elif indicator == "forecast_severity":
+                                amount = 0
                             elif indicator == "alert_threshold":
                                 amount = 0.0
                             exposure_pcodes.append(
@@ -538,7 +669,7 @@ class Load:
                         "dynamicIndicator": indicator,
                         "adminLevel": adm_level,
                         "exposurePlaceCodes": exposure_pcodes,
-                        "disasterType": "floods",
+                        "disasterType": disasterType,
                         "eventName": None,  # this is a specific check IBF uses to establish no-trigger
                         "date": upload_time,
                     }
@@ -584,26 +715,19 @@ class Load:
                 "key": indicator,
                 "dynamicPointData": station_forecasts[indicator],
                 "pointDataCategory": "glofas_stations",
-                "disasterType": "floods",
+                "disasterType": disasterType,
                 "date": upload_time,
             }
             self.ibf_api_post_request("point-data/dynamic", body=body)
 
-        # close events: event/close-events
-        body = {
-            "countryCodeISO3": country,
-            "disasterType": "floods",
-            "date": upload_time,
-        }
-        self.ibf_api_post_request("event/close-events", body=body)
-
         # send notification
         body = {
             "countryCodeISO3": country,
-            "disasterType": "floods",
+            "disasterType": disasterType,
             "date": upload_time,
         }
-        self.ibf_api_post_request("notification/send", body=body)
+        self.ibf_api_post_request("events/process", body=body)
+ 
 
     def save_pipeline_data(
         self, data_type: str, dataset: AdminDataSet, replace_country: bool = False
@@ -651,14 +775,38 @@ class Load:
                     raise ValueError(
                         f"Data unit {data_unit} is not of type ThresholdStationDataUnit"
                     )
-
+        elif data_type == "threshold-basin":
+            for data_unit in dataset.data_units:
+                if not isinstance(data_unit, ThresholdBasinDataUnit):
+                    raise ValueError(
+                        f"Data unit {data_unit} is not of type ThresholdStationDataUnit"
+                   )
+        elif data_type == "basin":
+            for data_unit in dataset.data_units:
+                if not isinstance(data_unit, BasinDataUnit):
+                    raise ValueError(
+                        f"Data unit {data_unit} is not of type BasinDataUnit"
+                    )
+        elif data_type == "basin-rainfall":
+            for data_unit in dataset.data_units:
+                if not isinstance(data_unit, RainfallBasinDataUnit):
+                    raise ValueError(
+                        f"Data unit {data_unit} is not of type RainfallBasinDataUnit"
+                    )
+        elif data_type == "forecast-basin":
+            for data_unit in dataset.data_units:
+                if not isinstance(data_unit, ForecastBasinDataUnit):
+                    raise ValueError(
+                        f"Data unit {data_unit} is not of type ForecastBasinDataUnit"
+                    )
+                
         client_ = cosmos_client.CosmosClient(
             self.secrets.get_secret("COSMOS_URL"),
             {"masterKey": self.secrets.get_secret("COSMOS_KEY")},
             user_agent="sml-api",
             user_agent_overwrite=True,
         )
-        cosmos_db = client_.get_database_client("flood-pipeline")
+        cosmos_db = client_.get_database_client("flash-flood-pipeline")
         cosmos_container_client = cosmos_db.get_container_client(data_type)
         if replace_country:
             query = get_cosmos_query(country=dataset.country)
@@ -683,6 +831,7 @@ class Load:
         adm_level=None,
         pcode=None,
         lead_time=None,
+        hybasid=None,
     ) -> AdminDataSet:
         """Download pipeline datasets from Cosmos DB"""
         if data_type not in COSMOS_DATA_TYPES:
@@ -696,10 +845,10 @@ class Load:
             user_agent="ibf-flood-pipeline",
             user_agent_overwrite=True,
         )
-        cosmos_db = client_.get_database_client("flood-pipeline")
+        cosmos_db = client_.get_database_client("flash-flood-pipeline")
         cosmos_container_client = cosmos_db.get_container_client(data_type)
         query = get_cosmos_query(
-            start_date, end_date, country, adm_level, pcode, lead_time
+            start_date, end_date, country, adm_level, pcode, lead_time,hybasid
         )
         records_query = cosmos_container_client.query_items(
             query=query,
@@ -729,6 +878,20 @@ class Load:
                                 discharge_mean=record["discharge_mean"],
                                 discharge_ensemble=record["discharge_ensemble"],
                             )
+                        elif data_type == "basin":
+                            data_unit = BasinDataUnit(
+                                pcodes=record["pcodes"],
+                                hybalevel=record["hybalevel"],
+                                hybasid=record["hybasid"],
+                            )
+                        elif data_type == "basin-rainfall":
+                            data_unit = RainfallBasinDataUnit(
+                                hybalevel=record["hybalevel"],
+                                hybasid=record["hybasid"],
+                                lead_time=record["lead_time"],
+                                rainfall_mean=record["rainfall_mean"],
+                                rainfall_ensemble=record["rainfall_ensemble"],
+                            )
                         elif data_type == "forecast":
                             data_unit = ForecastDataUnit(
                                 adm_level=record["adm_level"],
@@ -746,6 +909,24 @@ class Load:
                                 adm_level=record["adm_level"],
                                 pcode=record["pcode"],
                                 thresholds=record["thresholds"],
+                            )
+                        elif data_type == "threshold-basin":
+                            data_unit = ThresholdBasinDataUnit(
+                                hybalevel=record["hybalevel"],
+                                hybasid=record["hybasid"],
+                                thresholds=record["thresholds"],
+                                pcodes=record["pcodes"],
+                                lead_time=record["lead_time"],
+                            )
+                        elif data_type == "forecast-basin":
+                            data_unit = ForecastBasinDataUnit(
+                                hybalevel=record["hybalevel"],
+                                hybasid=record["hybasid"],
+                                lead_time=record["lead_time"],
+                                forecasts=record["forecasts"],
+                                triggered=record["triggered"],
+                                return_period=record["return_period"],
+                                alert_class=record["alert_class"],
                             )
                         elif data_type == "discharge-station":
                             data_unit = DischargeStationDataUnit(
@@ -795,6 +976,19 @@ class Load:
                         country=country,
                         timestamp=timestamp,
                         adm_levels=adm_levels,
+                        data_units=data_units,
+                    )
+                    datasets.append(dataset)
+                elif (
+                    data_type == "basin" 
+                    or data_type == "basin-rainfall"
+                    or data_type == "forecast-basin"
+                    or data_type == "threshold-basin"
+                    ):
+
+                    dataset = BasinDataSet(
+                        country=country,
+                        timestamp=timestamp,
                         data_units=data_units,
                     )
                     datasets.append(dataset)
