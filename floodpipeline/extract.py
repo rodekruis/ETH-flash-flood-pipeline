@@ -24,6 +24,8 @@ import copy
 import glob 
 import numpy as np
 import xarray as xr
+from rasterio.transform import from_origin
+from rasterio.warp import calculate_default_transform, reproject, Resampling
 
  
  
@@ -263,7 +265,7 @@ class Extract:
             country = self.country
         logging.info(f"start preparing rainfall data for country {country}")
 
-        country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)     
+
         target_datetime = datetime.today()#.strftime("%Y%m%d")
 
         if debug:
@@ -282,6 +284,93 @@ class Extract:
                 target_datetime,
                 local_file_path
                 )
+            
+            # Settings       
+
+            depth_threshold =self.settings.get_setting("minimum_flood_depth")
+            flood_var_name = self.settings.get_setting("flood_var_name") # Change this if your variable name is different
+
+
+            # Find the first NetCDF file with "flood" in the filename
+            matches = glob.glob(os.path.join(local_file_path, '*floodmap*.nc'))
+            if not matches:
+                raise FileNotFoundError("No NetCDF file with 'floodmap' in the name found.")
+                
+            nc_file = matches[0]
+            print(f"Found file: {nc_file}")
+
+            # Open the NetCDF file
+            ds = xr.open_dataset(nc_file)
+
+
+            # Ensure the flood depth variable exists
+            if flood_var_name not in ds:
+                raise KeyError(f"Variable '{flood_var_name}' not found in the dataset.")
+
+            flood = ds[flood_var_name]
+
+            # Use first time step if needed
+            if "time" in flood.dims:
+                flood = flood.isel(time=0)
+
+            # Apply depth threshold
+            flood_masked = flood.where(flood > depth_threshold)
+            data = np.nan_to_num(flood_masked.values, nan=0.0)
+
+            # Use x and y coordinates
+            x = ds['x'].values
+            y = ds['y'].values
+
+            # Ensure y is in descending order (top-to-bottom)
+            if y[0] < y[-1]:
+                y = y[::-1]
+                data = data[::-1, :]
+
+            # Calculate resolution
+            res_x = (x[-1] - x[0]) / (len(x) - 1)
+            res_y = (y[0] - y[-1]) / (len(y) - 1)
+
+            # Define transform and CRS
+            src_transform = from_origin(x[0], y[0], res_x, res_y)
+            src_crs = 'EPSG:32637'
+            dst_crs = 'EPSG:4326'
+
+            # Prepare destination transform and shape
+            dst_transform, width, height = calculate_default_transform(
+                src_crs, dst_crs, data.shape[1], data.shape[0], *rasterio.transform.array_bounds(data.shape[0], data.shape[1], src_transform)
+            )
+
+            # Prepare output array
+            dst_data = np.empty((height, width), dtype=data.dtype)
+
+            # Reproject
+            reproject(
+                source=data,
+                destination=dst_data,
+                src_transform=src_transform,
+                src_crs=src_crs,
+                dst_transform=dst_transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.nearest
+            )
+
+            # Save to GeoTIFF
+            output_tif = local_file_path + '/flood_extent.tif'
+
+            with rasterio.open(
+                output_tif,
+                'w',
+                driver='GTiff',
+                height=height,
+                width=width,
+                count=1,
+                dtype=dst_data.dtype,
+                crs=dst_crs,
+                transform=dst_transform
+            ) as dst:
+                dst.write(dst_data, 1)
+
+
 
         except FileNotFoundError:
             logging.warning(

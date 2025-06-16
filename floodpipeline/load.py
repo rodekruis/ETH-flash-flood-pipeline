@@ -909,6 +909,7 @@ class Load:
                                 adm_level=record["adm_level"],
                                 pcode=record["pcode"],
                                 thresholds=record["thresholds"],
+                                lead_time=record["lead_time"],
                             )
                         elif data_type == "threshold-basin":
                             data_unit = ThresholdBasinDataUnit(

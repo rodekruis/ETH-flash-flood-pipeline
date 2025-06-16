@@ -169,6 +169,7 @@ class ThresholdDataUnit(AdminDataUnit):
     def __init__(self, thresholds: List[Threshold], **kwargs):
         super().__init__(**kwargs)
         self.thresholds: List[Threshold] = thresholds
+        self.lead_time: int = kwargs.get("lead_time")
 
     def get_threshold(self, return_period: float) -> Threshold:
         """Get trigger threshold by return period"""
@@ -346,6 +347,24 @@ class BasinDataSet:
         self.country = country
         self.timestamp = timestamp
         self.data_units = data_units or []
+
+    def get_pcodes(self, adm_level: int = None):
+        """Return list of unique pcodes, optionally filtered by adm_level"""
+        return list(set([x.pcodes for x in self.data_units]))
+    
+
+
+    def get_basin_codes(self):
+        """Return list of unique station codes"""
+        return list(
+            set([x.hybasid for x in self.data_units if hasattr(x, "hybasid")])
+        )     
+
+    def get_lead_times(self):
+        """Return list of unique lead times"""
+        return list(
+            set([x.lead_time for x in self.data_units if hasattr(x, "lead_time")])
+        )
 
     def get_data_unit(self, hybasid: str, lead_time: float = None) -> BasinDataUnit:
         if lead_time is not None:

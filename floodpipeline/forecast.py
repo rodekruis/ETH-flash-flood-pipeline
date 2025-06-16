@@ -142,7 +142,8 @@ class Forecast:
         self.load = Load(settings=self.settings, secrets=self.secrets)
         self.input_data_path: str = "data/input"
         self.output_data_path: str = "data/output"
-        self.flood_extent_raster: str = self.output_data_path + "/flood_extent.tif"
+        #self.flood_extent_raster: str = self.output_data_path + "/flood_extent.tif"
+        self.flood_extent_raster: str = self.input_data_path + "/hydrology/flood_extent.tif"
         self.pop_raster: str = self.input_data_path + "/population_density.tif"
         self.aff_pop_raster: str = self.output_data_path + "/affected_population.tif"
         self.data = data
@@ -186,45 +187,61 @@ class Forecast:
         """Determine if trigger level is reached, its probability, and the alert class"""
 
         country = self.data.discharge_admin.country
+
         trigger_on_lead_time = self.settings.get_country_setting(
             country, "trigger-on-lead-time"
         )
+
         trigger_on_return_period = self.settings.get_country_setting(
             country, "trigger-on-return-period"
         )
+
         trigger_on_minimum_probability = self.settings.get_country_setting(
             country, "trigger-on-minimum-probability"
         )
+
         classify_alert_on = self.settings.get_country_setting(
             country, "classify-alert-on"
         )
+
         alert_on_return_period = self.settings.get_country_setting(
             country, "alert-on-return-period"
         )
+
         alert_on_minimum_probability = self.settings.get_country_setting(
             country, "alert-on-minimum-probability"
         )
 
+        # for rainfall check basin rainfall self.data.basin_rainfall and for discharge 
+        # check river discharge self.data.discharge_admin
+
         for pcode in self.data.discharge_admin.get_pcodes():
-            threshold_data_unit = self.data.threshold_admin.get_data_unit(pcode)
+            #threshold_data_unit = self.data.threshold_admin.get_data_unit(pcode=pcode)
             for lead_time in self.data.discharge_admin.get_lead_times():
+                threshold_data_unit = self.data.threshold_admin.get_data_unit(pcode=pcode,lead_time= lead_time) 
+                # different trigger levels for different lead times
                 discharge_data_unit = self.data.discharge_admin.get_data_unit(
                     pcode, lead_time
                 )
+
                 adm_level = discharge_data_unit.adm_level
 
                 # calculate likelihood per return period
                 likelihood_per_return_period, forecasts = {}, []
+
                 for threshold in threshold_data_unit.thresholds:
                     threshold_checks = map(
                         lambda x: 1 if x > threshold["threshold_value"] else 0,
                         discharge_data_unit.discharge_ensemble,
                     )
-                    likelihood = sum(threshold_checks) / len(
-                        discharge_data_unit.discharge_ensemble
-                    )
+
+                    #likelihood = 1 # this is a for deterministic forecast, so likelihood is 1
+                    likelihood= sum(threshold_checks) / len(discharge_data_unit.discharge_ensemble)
+
                     return_period = threshold["return_period"]
+
                     likelihood_per_return_period[return_period] = likelihood
+
                     forecasts.append(
                         FloodForecast(
                             return_period=return_period, likelihood=likelihood
@@ -272,9 +289,23 @@ class Forecast:
         """Compute flood extent raster"""
         # get country-wide flood extent rasters
         country = self.data.forecast_admin.country
+
+
+
+        flood_rasters = {}
+        output_dir=self.input_data_path+'/hydrology'
+
+        # Loop through return periods and copy the file 
+        # Here we are going to use a floodextent map developed for the actual event but keepinng the retun period logic 
+        # please replace this as it might not be needed 
+        for rp in  [5,10, 20, 50, 75, 100, 200, 500]:
+            output_filename = f"flood_map_{country.upper()}_RP{rp}.tif"
+            output_path = os.path.join(output_dir, output_filename)
+            shutil.copyfile(self.flood_extent_raster, output_path)
+ 
+        ''' 
         if os.path.exists(self.flood_extent_raster):
             os.remove(self.flood_extent_raster)
-        flood_rasters = {}
         for rp in [10, 20, 50, 75, 100, 200, 500]:
             flood_raster_filepath = (
                 self.input_data_path + f"/flood_map_{country.upper()}_RP{rp}.tif"
@@ -286,6 +317,7 @@ class Forecast:
                     f"/flood-maps/{country.upper()}/flood_map_{country.upper()}_RP{rp}.tif",
                 )
             flood_rasters[rp] = flood_raster_filepath
+        '''
 
         # create empty raster
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
@@ -298,10 +330,12 @@ class Forecast:
                 dest.write(flood_raster_data)
 
         adm_lvl = self.data.forecast_admin.adm_levels[-1]
+
         # get adm boundaries
         gdf_adm = self.load.get_adm_boundaries(
             self.data.forecast_admin.country, adm_lvl
         )
+
         gdf_adm.index = gdf_adm[f"adm{adm_lvl}_pcode"]
 
         for lead_time in self.data.forecast_admin.get_lead_times():
@@ -309,7 +343,6 @@ class Forecast:
             raster_lead_time = self.flood_extent_raster.replace(
                 ".tif", f"_{lead_time}.tif"
             )
-
             # calculate flood extent for each triggered admin division
             flood_rasters_admin_div = []
             for forecast_data_unit in self.data.forecast_admin.get_data_units(
@@ -490,6 +523,7 @@ class Forecast:
             threshold_station = self.data.threshold_station.get_data_unit(station_code)
 
             likelihood_per_return_period, forecasts = {}, []
+            
             for threshold in threshold_station.thresholds:
                 threshold_checks = map(
                     lambda x: 1 if x > threshold["threshold_value"] else 0,
