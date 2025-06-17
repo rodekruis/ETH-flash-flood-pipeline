@@ -434,7 +434,11 @@ class Load:
     ):
         """Send flood forecast data to IBF API"""
 
-        country = forecast_data.country
+        country = forecast_data.country 
+        logging.info(f"Sending data to IBF API for country {country} at {upload_time}")
+
+
+
         trigger_on_lead_time = self.settings.get_country_setting(
             country, "trigger-on-lead-time"
         )
@@ -450,9 +454,11 @@ class Load:
 
 
         processed_stations, processed_pcodes, triggered_lead_times = [], [], []
+        logging.info("Sending data to IBF API for country  1")
 
         # START EVENT LOOP
         for station_code in forecast_station_data.get_station_codes():
+            logging.info(f"Sending data to IBF API for country  station {station_code}")
 
             # determine events
             events = {}
@@ -472,9 +478,12 @@ class Load:
                 ).triggered:
                     events[lead_time] = "trigger"
                     triggered_lead_times.append(lead_time)
+
             if not events:
                 continue
+
             events = dict(sorted(events.items()))
+            
 
             for lead_time_event, event_type in events.items():
 
@@ -540,6 +549,7 @@ class Load:
                             "eventName": event_name,
                             "date": upload_time,
                         }
+                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator}")
                         self.ibf_api_post_request(
                             "admin-area-dynamic-data/exposure", body=body
                         )
@@ -573,7 +583,7 @@ class Load:
                                     trigger_on_return_period
                                 )
                             )
-                        station_data = {"fid": station_code, "value": value}
+                        station_data = {"fid": station_code[-1], "value": value}
                         station_forecasts[indicator].append(station_data)
                         body = {
                             "leadTime": f"{lead_time_event}-hour",
@@ -618,6 +628,7 @@ class Load:
 
         # flood extent raster: admin-area-dynamic-data/raster/floods
         self.rasters_sent = []
+        logging.info("Sending data to IBF API for country  no event")
         for lead_time in [1,2,3,6]: # range(0, 8):
             flood_extent_new = flood_extent.replace(
                 ".tif", f"_{lead_time}-hour_{country}.tif"
@@ -665,6 +676,8 @@ class Load:
                             exposure_pcodes.append(
                                 {"placeCode": pcode, "amount": amount}
                             )
+
+                    logging.info(f"Sending data to IBF API for country  no data indicator {indicator}")
                     body = {
                         "countryCodeISO3": country,
                         "leadTime": "1-hour",  # this is a specific check IBF uses to establish no-trigger
@@ -678,6 +691,7 @@ class Load:
                     self.ibf_api_post_request(
                         "admin-area-dynamic-data/exposure", body=body
                     )
+                    logging.info(f"finished Sending data to IBF API for country  no data indicator {indicator}")
 
         # send GloFAS station data for all other stations
         station_forecasts = {
@@ -686,6 +700,7 @@ class Load:
             "forecastReturnPeriod": [],
             "triggerLevel": [],
         }
+
         for indicator in station_forecasts.keys():
             for station_code in forecast_station_data.get_station_codes():
                 if station_code not in processed_stations:
@@ -709,10 +724,11 @@ class Load:
                         value = int(
                             threshold_station.get_threshold(trigger_on_return_period)
                         )
-                    station_data = {"fid": station_code, "value": value}
+                    station_data = {"fid": station_code[-1], "value": value}
                     station_forecasts[indicator].append(station_data)
 
             body = {
+                "countryCodeISO3": country,
                 "leadTime": f"1-hour",
                 "key": indicator,
                 "dynamicPointData": station_forecasts[indicator],
@@ -721,6 +737,7 @@ class Load:
                 "date": upload_time,
             }
             self.ibf_api_post_request("point-data/dynamic", body=body)
+            logging.info(f"finished Sending guage data to IBF API for country  no data indicator {indicator}")
 
         # send notification
         body = {
