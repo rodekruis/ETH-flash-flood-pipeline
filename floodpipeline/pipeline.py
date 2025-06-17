@@ -51,10 +51,10 @@ class Pipeline:
     def run_pipeline(
         self,
         prepare: bool = True,
-        extract: bool = False,
-        forecast: bool = False,
-        send: bool = False,
-        save: bool = False,
+        extract: bool = True,
+        forecast: bool = True,
+        send: bool = True,
+        save: bool = True,
         debug: bool = False,  # fast extraction on yesterday's data
         datetimestart: datetime = date.today(),
         datetimeend: datetime = date.today() + timedelta(days=1),
@@ -68,7 +68,7 @@ class Pipeline:
 
         if extract:
             logging.info(f"extract data")
-            self.extract.extract_hkvrain_data(country=self.country, debug=debug)
+            self.extract.extract_hkvrain_data_nc(country=self.country, debug=debug)
             self.extract.extract_wflow_data(country=self.country, debug=debug)
             if save:
                 logging.info("save data to storage")

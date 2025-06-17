@@ -45,6 +45,7 @@ class DischargeDataUnit(AdminDataUnit):
         self.lead_time: int = kwargs.get("lead_time")
         self.discharge_ensemble: List[float] = kwargs.get("discharge_ensemble", None)
         self.discharge_mean: float = kwargs.get("discharge_mean", None)
+        self.pcode: str = kwargs.get("pcode", None)
         if hasattr(self.discharge_ensemble, "__iter__"):
             self.compute_mean()
 
@@ -63,6 +64,11 @@ class DischargeStationDataUnit(StationDataUnit):
         self.lead_time: int = kwargs.get("lead_time")
         self.discharge_ensemble: List[float] = kwargs.get("discharge_ensemble", None)
         self.discharge_mean: float = kwargs.get("discharge_mean", None)
+        self.pcodes: dict = kwargs.get("pcodes", {})
+        self.lat: float = kwargs.get("lat", None)
+        self.lon: float = kwargs.get("lon", None)   
+        self.station_code: str = kwargs.get("station_code", None)
+        self.station_name: str = kwargs.get("station_name", None)
         if hasattr(self.discharge_ensemble, "__iter__"):
             self.compute_mean()
 

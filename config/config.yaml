@@ -7,6 +7,7 @@ floods:
   glofas_threshold_url: https://confluence.ecmwf.int/display/CEMS/Auxiliary+Data
   glofas_threshold_files: flood_threshold_glofas_v4_rl
   disaster_type: flash-floods
+  flood_var_name: z  # Change this if your variable name is different
 
 auxiliary:
   worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
@@ -24,7 +25,7 @@ countries:
       - 3
     pipeline-will-trigger-portal: enable
     classify-alert-on: disable
-    trigger-on-lead-time: 6
+    trigger-on-lead-time: 3
     trigger-on-return-period: 5
     trigger-on-minimum-probability: 0.6
     classify-alert-on: return-period
