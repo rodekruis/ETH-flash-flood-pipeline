@@ -403,10 +403,10 @@ class Load:
     def get_stations(self, country: str) -> list[dict]:
         """Get GloFAS stations from IBF app"""
         stations = self.ibf_api_get_request(
-            f"point-data/glofas_stations/{country}",
+            f"point-data/gauges/{country}",
             parameters={
-                "disasterType": "flood",
-                "pointDataCategory": "glofas_stations",
+                "disasterType": "flash-floods",#flash-floods
+                "pointDataCategory": "gauges",
                 "countryCodeISO3": country,
             },
         )
@@ -456,7 +456,7 @@ class Load:
 
             # determine events
             events = {}
-            for lead_time in range(1, 8):
+            for lead_time in [1,2,3,6]:
                 if (
                     forecast_station_data.get_data_unit(
                         station_code, lead_time
@@ -464,7 +464,9 @@ class Load:
                     != "no"
                 ):
                     events[lead_time] = "alert"
-            for lead_time in range(1, 8):
+
+
+            for lead_time in [1,2,3,6]:
                 if forecast_station_data.get_data_unit(
                     station_code, lead_time
                 ).triggered:
@@ -530,7 +532,7 @@ class Load:
                             processed_pcodes.append(pcode)
                         body = {
                             "countryCodeISO3": country,
-                            "leadTime": f"{lead_time_event}-day",
+                            "leadTime": f"{lead_time_event}-hour",
                             "dynamicIndicator": indicator,
                             "adminLevel": int(adm_level),
                             "exposurePlaceCodes": exposure_pcodes,
@@ -574,11 +576,11 @@ class Load:
                         station_data = {"fid": station_code, "value": value}
                         station_forecasts[indicator].append(station_data)
                         body = {
-                            "leadTime": f"{lead_time_event}-day",
+                            "leadTime": f"{lead_time_event}-hour",
                             "key": indicator,
                             "dynamicPointData": station_forecasts[indicator],
-                            "pointDataCategory": "glofas_stations",
-                            "disasterType": "floods",
+                            "pointDataCategory": "gauges",
+                            "disasterType": disasterType,
                             "date": upload_time,
                         }
                         self.ibf_api_post_request("point-data/dynamic", body=body)
@@ -586,7 +588,7 @@ class Load:
 
             # send trigger per lead time: event/triggers-per-leadtime
             triggers_per_lead_time = []
-            for lead_time in range(0, 8):
+            for lead_time in [1,2,3,6]:# range(0, 8):
                 is_trigger, is_trigger_or_alert = False, False
                 for lead_time_event, event_type in events.items():
                     if event_type == "trigger" and lead_time >= lead_time_event:
@@ -605,7 +607,7 @@ class Load:
             body = {
                 "countryCodeISO3": country,
                 "triggersPerLeadTime": triggers_per_lead_time,
-                "disasterType": "floods",
+                "disasterType": disasterType,
                 "eventName": event_name,
                 "date": upload_time,
             }
@@ -616,9 +618,9 @@ class Load:
 
         # flood extent raster: admin-area-dynamic-data/raster/floods
         self.rasters_sent = []
-        for lead_time in range(0, 8):
+        for lead_time in [1,2,3,6]: # range(0, 8):
             flood_extent_new = flood_extent.replace(
-                ".tif", f"_{lead_time}-day_{country}.tif"
+                ".tif", f"_{lead_time}-hour_{country}.tif"
             )
             if lead_time in triggered_lead_times:
                 shutil.copy(
@@ -665,7 +667,7 @@ class Load:
                             )
                     body = {
                         "countryCodeISO3": country,
-                        "leadTime": "1-day",  # this is a specific check IBF uses to establish no-trigger
+                        "leadTime": "1-hour",  # this is a specific check IBF uses to establish no-trigger
                         "dynamicIndicator": indicator,
                         "adminLevel": adm_level,
                         "exposurePlaceCodes": exposure_pcodes,
@@ -711,10 +713,10 @@ class Load:
                     station_forecasts[indicator].append(station_data)
 
             body = {
-                "leadTime": f"7-day",
+                "leadTime": f"1-hour",
                 "key": indicator,
                 "dynamicPointData": station_forecasts[indicator],
-                "pointDataCategory": "glofas_stations",
+                "pointDataCategory": "gauges",
                 "disasterType": disasterType,
                 "date": upload_time,
             }

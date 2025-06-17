@@ -302,6 +302,8 @@ class Forecast:
             output_filename = f"flood_map_{country.upper()}_RP{rp}.tif"
             output_path = os.path.join(output_dir, output_filename)
             shutil.copyfile(self.flood_extent_raster, output_path)
+
+            flood_rasters[rp] = output_path
  
         ''' 
         if os.path.exists(self.flood_extent_raster):
@@ -321,6 +323,7 @@ class Forecast:
 
         # create empty raster
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
+
         with rasterio.open(list(flood_rasters.values())[0]) as src:
             flood_raster_data = src.read()
             flood_raster_data = np.empty(flood_raster_data.shape)

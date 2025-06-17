@@ -30,9 +30,9 @@ countries:
     trigger-on-minimum-probability: 0.6
     classify-alert-on: return-period
     alert-on-return-period:
-      min: 1.5
-      med: 2
-      max: 5
+      min: 2
+      med: 5
+      max: 10
     alert-on-minimum-probability: 0.6
 
   
