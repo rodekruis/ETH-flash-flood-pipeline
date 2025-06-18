@@ -279,10 +279,12 @@ class Extract:
             logging.info(f"start extract rainfall data for country {country}")
    
             target_datetime=datetime.today() 
+       
 
             if debug:
                 #target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")
                 target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
+                
 
             local_file_path = self.inputPathGrid +"/meteorology"
 
@@ -321,6 +323,7 @@ class Extract:
                 results[label] = max_df
             # Add max values to GeoDataFrame
             result_df= pd.DataFrame()
+
             for label in results:
                 result_df[f"max_{label}"] = np.max(np.array(results[label]), axis=0)
 
@@ -482,9 +485,11 @@ class Extract:
         logging.info(f"start extracting wflow data for country {country}")   
 
         target_datetime = datetime.today()#.strftime("%Y%m%d")
+        flow_multiplier=1 # Set multiplier for flow values, to simulate triggering of flood alerts
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d") 
+            flow_multiplier=100 # Set multiplier for flow values, to simulate triggering of flood alerts
 
         local_file_path = self.inputPathGrid +"/hydrology"
                    
@@ -503,29 +508,34 @@ class Extract:
             df['delta'] = df['analysis_time'] - df['time']
             df['lead_time'] = df['delta'].dt.total_seconds() / 3600  # Convert to hours 
             df['lead_time'] = df['lead_time'].astype(int)
+            df['Q'] = df['Q'] * flow_multiplier  # Apply flow multiplier
 
-            admin_level=self.data.discharge_admin.adm_levels
+            #admin_level=self.data.discharge_admin.adm_levels
 
-            for admin_level in self.data.discharge_admin.adm_levels:                
+            for admin_level in self.data.discharge_admin.adm_levels:
                 for data_unit in self.data.threshold_station.data_units:
+                    pcodes= data_unit.pcodes[f'{admin_level}']                      
+                     
                     st_name = data_unit.station_name
-                    logging.info(f"Processing station: {st_name} for admin level {admin_level}")
-                    pcodes= data_unit.pcodes[f'{admin_level}'] 
+
+                    logging.info(f"Processing station: {st_name} for admin level {admin_level}")           
                     
                     for lead_time in [1, 2, 3, 6, 12]: 
+                        logging.warning(f"Admin level {admin_level} not found in discharge_admin levels for leadtime {lead_time} ") 
                         df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")    
                         max_value =  np.nanmax(df_station['Q'].values)
                         self.data.discharge_station.upsert_data_unit(
                             DischargeStationDataUnit(
                                 station_code=data_unit.station_code,
                                 station_name=data_unit.station_name,
-                                pcodes=data_unit.pcodes,
+                                pcodes=pcodes,
                                 lead_time=lead_time,
                                 discharge_ensemble=[max_value],
                             )
                         )             
 
                         for pcode in pcodes:
+                            logging.warning(f"Admin level {admin_level} for leadtime {lead_time} for pcode {pcode} s") 
                             self.data.discharge_admin.upsert_data_unit(
                                 DischargeDataUnit(
                                     adm_level=admin_level,

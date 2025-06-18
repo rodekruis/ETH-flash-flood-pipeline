@@ -449,6 +449,10 @@ class Load:
             data_type="threshold-station", country=country
         )
 
+        
+
+        adm_levels=self.settings.get_country_setting(country, "admin-levels")
+
         disasterType= self.settings.get_setting('disaster_type')  # "flash-floods"
         pipeline_will_trigger_portal = self.settings.get_country_setting(country, "pipeline-will-trigger-portal") 
 
@@ -513,10 +517,13 @@ class Load:
                     "forecast_trigger",
                     "forecast_severity",
                 ]
+
                 for indicator in indicators:
-                    for adm_level in forecast_station.pcodes.keys():
+                    for adm_level in adm_levels: #forecast_station.pcodes.keys(): uploading data only for admin level 3 
                         exposure_pcodes = []
-                        for pcode in forecast_station.pcodes[adm_level]:
+                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator} admin level {forecast_station.pcodes}")
+                        for pcode in forecast_station.pcodes:
+                        #for pcode in forecast_station.pcodes[f'{adm_level}']:                        
                             forecast_admin = forecast_data.get_data_unit(
                                 pcode, lead_time_event
                             )
@@ -526,7 +533,7 @@ class Load:
                             elif indicator == "population_affected_percentage":
                                 amount = forecast_admin.pop_affected_perc
                             elif indicator == "forecast_severity":
-                                amount =forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                                amount =amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
                             elif indicator == "forecast_trigger":
                                 amount = forecast_trigger_status(
                                     triggered=(True if event_type == "trigger" else False),
@@ -550,6 +557,15 @@ class Load:
                             "date": upload_time,
                         }
                         logging.info(f"Sending data to IBF API for country {country} indicator {indicator}")
+
+                        statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
+
+                        statsPath=statsPath.replace("extent", f"{indicator}")
+
+                        with open(statsPath, 'w') as fp:
+                            json.dump(body, fp)
+
+
                         self.ibf_api_post_request(
                             "admin-area-dynamic-data/exposure", body=body
                         )
@@ -586,6 +602,7 @@ class Load:
                         station_data = {"fid": station_code[-1], "value": value}
                         station_forecasts[indicator].append(station_data)
                         body = {
+                            "countryCodeISO3": country,
                             "leadTime": f"{lead_time_event}-hour",
                             "key": indicator,
                             "dynamicPointData": station_forecasts[indicator],
@@ -594,6 +611,13 @@ class Load:
                             "date": upload_time,
                         }
                         self.ibf_api_post_request("point-data/dynamic", body=body)
+
+                        statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
+                        statsPath=statsPath.replace("extent", f"{indicator}")
+
+                        with open(statsPath, 'w') as fp:
+                            json.dump(body, fp)
+
                     processed_stations.append(station_code)
 
             # send trigger per lead time: event/triggers-per-leadtime

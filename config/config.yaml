@@ -10,7 +10,9 @@ floods:
   flood_var_name: z  # Change this if your variable name is different
 
 auxiliary:
-  worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
+  #worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
+  worldpop_url: https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/
+
 
 databases:
   blob_container: ibfdatapipelines

@@ -51,9 +51,11 @@ class DischargeDataUnit(AdminDataUnit):
 
     def compute_mean(self):
         """Compute mean river discharge"""
-        self.discharge_mean = sum(self.discharge_ensemble) / len(
-            self.discharge_ensemble
-        )
+        try:
+            self.discharge_mean = sum(self.discharge_ensemble) / len(self.discharge_ensemble)
+        except ZeroDivisionError:
+            self.discharge_mean = 0
+ 
 
 
 class DischargeStationDataUnit(StationDataUnit):
@@ -74,9 +76,11 @@ class DischargeStationDataUnit(StationDataUnit):
 
     def compute_mean(self):
         """Compute mean river discharge"""
-        self.discharge_mean = sum(self.discharge_ensemble) / len(
-            self.discharge_ensemble
-        )
+        try:
+            self.discharge_mean = sum(self.discharge_ensemble) / len(self.discharge_ensemble)
+        except ZeroDivisionError:
+            self.discharge_mean = 0
+        
 
 
 class RainfallBasinDataUnit(BasinDataUnit):
@@ -95,27 +99,12 @@ class RainfallBasinDataUnit(BasinDataUnit):
 
     def compute_mean(self):
         """Compute mean rainfall"""
-        self.rainfall_mean = sum(self.rainfall_ensemble) / len(self.rainfall_ensemble)
+        try: 
+            self.rainfall_mean = sum(self.rainfall_ensemble) / len(self.rainfall_ensemble)
+        except ZeroDivisionError:
+            self.rainfall_mean = 0
         
-    '''
-    def select_hydrobasins_levle(lead_time: float) -> int:
-        """
-        the rainfall forecast data has different skill level based on the lead time.
-        more accurate for short lead time, less accurate for long lead time.
-        for short lead time, use level 12 (smaller basins)
-        for medium lead time, use level 10 (medium size basins ) etc...
-        Choose basin aggregation resolution based on lead time:
-          >6h → level 7
-          3–6h → level 9
-          <3h → level 10
-        """
-        if lead_time > 6:
-            return {7: [1070803250]}
-        elif lead_time >= 3:
-            return {9: [1090830330, 1090830320]}
-        else:
-            return {10: [1100830840, 1100830330, 1100831050, 1100833680]}
-'''
+
 
 
 
