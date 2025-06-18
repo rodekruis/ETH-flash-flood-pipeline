@@ -277,8 +277,7 @@ class Extract:
             if country is None:
                 country = self.country
             logging.info(f"start extract rainfall data for country {country}")
-
-            country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)    
+   
             target_datetime=datetime.today() 
 
             if debug:
@@ -290,7 +289,7 @@ class Extract:
             # Load and sort TIF files
             nc_files = sorted(glob.glob(os.path.join(local_file_path, "*.nc")))
 
-            tif_folder = local_file_path
+
             shapefile_path = self.inputPathGrid + "/other/hybas_af_v1c_clipped.geojson"
 
             #hybas_ids = [1100830330, 1100833680, 1090830330, 1100830840, 1090830320, 1070803250, 1100833460, 1100831050]
@@ -480,19 +479,16 @@ class Extract:
         """
         if country is None:
             country = self.country
-        logging.info(f"start extracting wflow data for country {country}")
+        logging.info(f"start extracting wflow data for country {country}")   
 
-        country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)     
         target_datetime = datetime.today()#.strftime("%Y%m%d")
 
         if debug:
-            target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")             
+            target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d") 
 
         local_file_path = self.inputPathGrid +"/hydrology"
                    
         try:
-            files = os.listdir(local_file_path)
-
             local_files = glob.glob(os.path.join(local_file_path, "*discharge*"))          
      
             # Sort files based on timestamp (latest first)
@@ -527,7 +523,7 @@ class Extract:
                                 lead_time=lead_time,
                                 discharge_ensemble=[max_value],
                             )
-                        )              
+                        )             
 
                         for pcode in pcodes:
                             self.data.discharge_admin.upsert_data_unit(

@@ -1,15 +1,56 @@
 
 # IBF-flash-flood-pipeline
 
-Forecast riverine flooding. Part of [IBF-system](https://github.com/rodekruis/IBF-system).
+A workflow to update flash flood forecasting portal. Part of [IBF-system](https://github.com/rodekruis/IBF-system).
 
 ## 🌊 Flash Flood Forecast Pipeline
 
-A modular, CLI-enabled pipeline for anticipatory flood forecasting. It fetches hydrometeorological data, processes it through deterministic and probabilistic models, evaluates risk, and pushes alerts and impact estimates to external platforms like the IBF system.
+A modular, CLI-enabled pipeline for updating flash flood forecasting portal. It fetches hydrometeorological data, processes it through deterministic and probabilistic models, evaluates risk, and pushes alerts and impact estimates to the IBF system.
 
 This pipeline was developed to support humanitarian early action by enabling country-specific, flexible, and automated workflows.
+---
+
+## Running the flash flood Pipeline with Docker Compose
+
+To run the drought pipeline for testing using Docker Compose, follow these steps:
+
+1. Ensure you have Docker and Docker Compose installed on your machine.
+
+2. Place your `.env` file in the same directory as your `docker-compose.yml` file. This file should contain the necessary environment variables for the pipeline. The variables are in `.en.example` file 
+
+3. Build and run the Docker container using Docker Compose:
+
+    ```sh
+    docker-compose up --build
+    ```
+
+This will build the Docker image and run the flash flood pipeline with the specified options (`--country ETH --prepare --extract --forecast --send`).
+
+You can modify the `command` section in the `docker-compose.yml` file to change the options as needed for your testing.
 
 ---
+
+### 🔧 Command-Line Options
+
+| Option         | Description                                                             | Example                                    |
+|----------------|-------------------------------------------------------------------------|--------------------------------------------|
+| `--country`    | ISO3 code for the target country                                         | `--country KEN`                             |
+| `--prepare`    | Download and prepare input data (admin boundaries, shapefiles, etc.)     | `--prepare`                                 |
+| `--extract`    | Download and process forecast data (e.g., rainfall, discharge)           | `--extract`                                 |
+| `--forecast`   | Run flood forecasting logic (triggers, alerts, affected population)      | `--forecast`                                |
+| `--send`       | Push outputs to the IBF system API                                       | `--send`                                    |
+| `--save`       | Save results to Azure Cosmos DB and Blob Storage                         | `--save`                                    |
+| `--datetimestart` | Custom start date in ISO 8601 format (default: today)                | `--datetimestart 2025-06-15T00:00:00`       |
+| `--datetimeend`   | Custom end date in ISO 8601 format (default: tomorrow)               | `--datetimeend 2025-06-16T00:00:00`         |
+| `--debug`      | Enable debug mode (e.g., process only one ensemble, use mock data)       | `--debug`                                   |
+
+---
+
+
+## Triggering Model Run for Drought Scenarios
+
+---
+
 ## 📦 Project Structure
 
 The main module defines:
@@ -19,6 +60,7 @@ The main module defines:
 * 🚨 **Forecast and Threshold Units** – to evaluate hazard and trigger alerts
 * 🧹 **Dataset Managers** – to organize and manipulate data collections across units
 
+---
 ## 🧠 Key Classes
 
 | Class                                            | Description                                                                |
@@ -33,31 +75,6 @@ The main module defines:
 | `AdminDataSet`, `StationDataSet`, `BasinDataSet` | Manage grouped data units by type and geography                            |
 | `PipelineDataSets`                               | Container for all datasets needed in the flood forecasting pipeline        |
 
- 
-
-## 🚀 Quick Start
-
-Run the pipeline directly from the command line:
-
-```bash
-python run_pipeline.py --country UGA --prepare --extract --forecast --send --save
-```
-
----
-
-## 🔧 Command-Line Options
-
-| Option         | Description                                                             | Example                                    |
-|----------------|-------------------------------------------------------------------------|--------------------------------------------|
-| `--country`    | ISO3 code for the target country                                         | `--country KEN`                             |
-| `--prepare`    | Download and prepare input data (admin boundaries, shapefiles, etc.)     | `--prepare`                                 |
-| `--extract`    | Download and process forecast data (e.g., rainfall, discharge)           | `--extract`                                 |
-| `--forecast`   | Run flood forecasting logic (triggers, alerts, affected population)      | `--forecast`                                |
-| `--send`       | Push outputs to the IBF system API                                       | `--send`                                    |
-| `--save`       | Save results to Azure Cosmos DB and Blob Storage                         | `--save`                                    |
-| `--datetimestart` | Custom start date in ISO 8601 format (default: today)                | `--datetimestart 2025-06-15T00:00:00`       |
-| `--datetimeend`   | Custom end date in ISO 8601 format (default: tomorrow)               | `--datetimeend 2025-06-16T00:00:00`         |
-| `--debug`      | Enable debug mode (e.g., process only one ensemble, use mock data)       | `--debug`                                   |
 
 ---
 
@@ -85,15 +102,8 @@ The CLI wraps around a modular Python library composed of:
 
 ---
 
-## 📁 Example: Full Run
-
-```bash
-python run_pipeline.py --country ETH --prepare --extract --forecast --send --save
-```
-
----
-
-## 📦 Installation
+ 
+ 
 
 ### Requirements
 
@@ -133,17 +143,6 @@ ETH:
 
 ---
 
-## 🧪 Developer Notes
-
-You can run pipeline steps independently:
-
-```bash
-python run_pipeline.py --country ETH --extract
-python run_pipeline.py --country ETH --forecast
-```
-
----
-
 ## 📝 License
 
 MIT License
@@ -160,9 +159,4 @@ MIT License
 
 
 ---
-
-## 👤 Author
-
-Developed by **Tekle** as part of the ETH Flash Flood Anticipatory Action initiative.
-
 
