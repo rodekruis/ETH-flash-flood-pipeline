@@ -7,6 +7,8 @@ from floodpipeline.settings import Settings
 from floodpipeline.data import PipelineDataSets
 from datetime import datetime, date, timedelta
 import logging
+import shutil
+import os
 
 logger = logging.getLogger()
 logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
@@ -26,6 +28,7 @@ class Pipeline:
         self.country = country
         self.load = Load(settings=settings, secrets=secrets)
         self.data = PipelineDataSets(country=country, settings=settings)
+        self.output_data_path: str = "data/output"
 
         self.data.threshold_admin = self.load.get_pipeline_data(
             data_type="threshold", country=self.country
@@ -60,6 +63,14 @@ class Pipeline:
         datetimeend: datetime = date.today() + timedelta(days=1),
     ):
         """Run the flood data pipeline"""
+
+        # Remove the folder if it exists
+        if os.path.exists(self.output_data_path):
+            shutil.rmtree(self.output_data_path)
+
+        # Recreate the empty folder
+        os.makedirs(self.output_data_path)
+
 
         if prepare:
             logging.info("prepare data")

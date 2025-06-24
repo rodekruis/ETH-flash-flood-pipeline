@@ -12,6 +12,36 @@ This pipeline was developed to support humanitarian early action by enabling cou
 
 ## Running the flash flood Pipeline with Docker Compose
 
+### Option 1: With Poetry
+Dependency python>=3.11,<3.12
+1. Fill in the secrets in .env.example and rename the file to .env; in this way, they will be loaded as environment variables. Consider using only secrets of your __test__ environment for non-production purpose.
+2. Install requirements
+   ```
+   pip install poetry
+   poetry install --no-interaction
+   ```
+3. Run the pipeline : `python flood_pipeline.py` or `poetry run python flood_pipeline.py` with relevant arguments below.
+   ```
+   Usage: drought_pipeline.py [OPTIONS]
+
+   Options:
+     --country TEXT        country ISO3
+     --prepare             prepare data
+     --extract             extract data
+     --forecast            forecast 
+     --send                send to IBF
+     --save                save to storage
+     --datetimestart       year-month in ISO 8601
+	 --datetimeend
+     --debug               debug mode: process data with mock scenario threshold
+   ```
+   To do a full run for a country, replace `--country TEXT` with its country ISO3 (e.g. `--country ETH`): 
+   
+   ```
+   poetry run python flood_pipeline.py --country TEXT --prepare --extract --forecast --send --save
+   ```
+### Option 2: With Docker Compose
+
 To run the drought pipeline for testing using Docker Compose, follow these steps:
 
 1. Ensure you have Docker and Docker Compose installed on your machine.

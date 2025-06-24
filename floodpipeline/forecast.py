@@ -142,8 +142,8 @@ class Forecast:
         self.load = Load(settings=self.settings, secrets=self.secrets)
         self.input_data_path: str = "data/input"
         self.output_data_path: str = "data/output"
-        #self.flood_extent_raster: str = self.output_data_path + "/flood_extent.tif"
-        self.flood_extent_raster: str = self.input_data_path + "/hydrology/flood_extent.tif"
+        self.flood_extent_raster: str = self.output_data_path + "/flood_extent.tif"
+        #self.flood_extent_raster: str = self.input_data_path + "/hydrology/flood_extent.tif"
         self.pop_raster: str = self.input_data_path + "/population_density.tif"
         self.aff_pop_raster: str = self.output_data_path + "/affected_population.tif"
         self.data = data

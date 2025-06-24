@@ -453,7 +453,7 @@ class Extract:
             )
 
             # Save to GeoTIFF
-            output_tif = local_file_path + '/flood_extent.tif'
+            output_tif = self.outputPathGrid + '/flood_extent.tif'
 
             with rasterio.open(
                 output_tif,
@@ -482,14 +482,16 @@ class Extract:
         """
         if country is None:
             country = self.country
+
         logging.info(f"start extracting wflow data for country {country}")   
 
         target_datetime = datetime.today()#.strftime("%Y%m%d")
+
         flow_multiplier=1 # Set multiplier for flow values, to simulate triggering of flood alerts
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d") 
-            flow_multiplier=100 # Set multiplier for flow values, to simulate triggering of flood alerts
+            flow_multiplier=100000 # Set multiplier for flow values, to simulate triggering of flood alerts
 
         local_file_path = self.inputPathGrid +"/hydrology"
                    

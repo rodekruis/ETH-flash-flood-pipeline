@@ -458,6 +458,11 @@ class Load:
 
 
         processed_stations, processed_pcodes, triggered_lead_times = [], [], []
+
+        event_id = datetime.strptime(upload_time, "%Y-%m-%dT%H:%M:%SZ")
+        event_id = event_id.strftime("%Y%m%d%H")
+
+
         logging.info("Sending data to IBF API for country  1")
 
         # START EVENT LOOP
@@ -483,10 +488,19 @@ class Load:
                     events[lead_time] = "trigger"
                     triggered_lead_times.append(lead_time)
 
-            if not events:
+            ###########################
+            #  flash flood portal currently accept only trigger therefore we filter out alerts 
+            trigger_events = {}
+
+            for key, value in events.items():
+                if key not in trigger_events and value == "trigger":
+                    trigger_events[key] = value
+
+
+            if not trigger_events:
                 continue
 
-            events = dict(sorted(events.items()))
+            events = dict(sorted(trigger_events.items()))
             
 
             for lead_time_event, event_type in events.items():
@@ -497,7 +511,9 @@ class Load:
                 station_name = forecast_station_data.get_data_unit(
                     station_code, trigger_on_lead_time
                 ).station_name
-                event_name = str(station_name) if station_name else str(station_code)
+
+                event_name = event_id + "_" + str(lead_time_event)  #str(station_name) if station_name[-1] else str(station_code)
+
                 if event_name == "" or event_name == "None" or event_name == "Na":
                     event_name = str(station_code)
 
@@ -533,7 +549,7 @@ class Load:
                             elif indicator == "population_affected_percentage":
                                 amount = forecast_admin.pop_affected_perc
                             elif indicator == "forecast_severity":
-                                amount =amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                                amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
                             elif indicator == "forecast_trigger":
                                 amount = forecast_trigger_status(
                                     triggered=(True if event_type == "trigger" else False),
@@ -556,7 +572,7 @@ class Load:
                             "eventName": event_name,
                             "date": upload_time,
                         }
-                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator}")
+                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour admin level {adm_level} event name {event_name}")
 
                         statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
 
