@@ -27,7 +27,7 @@ import xarray as xr
 from rasterio.transform import from_origin
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 import rioxarray
- 
+import shutil
  
  
  
@@ -66,6 +66,9 @@ class Extract:
         
         if not os.path.exists(self.outputPathGrid):
             os.makedirs(self.outputPathGrid)
+
+
+
 
         if settings is not None:
             self.set_settings(settings)
@@ -148,11 +151,11 @@ class Extract:
 
         if not os.path.exists(local_file_path):
             os.makedirs(local_file_path)
-        base_dir= 'Meteorology' #"Hydrology"      
+        base_dir= 'Meteorology' 
+
         try:
             self.load.download_forecast_file(
                 base_dir,
-                target_datetime,
                 local_file_path
                 )
         except FileNotFoundError:
@@ -289,19 +292,23 @@ class Extract:
             local_file_path = self.inputPathGrid +"/meteorology"
 
             # Load and sort TIF files
-            nc_files = sorted(glob.glob(os.path.join(local_file_path, "*.nc")))
+            #nc_files = glob.glob(os.path.join(local_file_path, '*Nowcast_rain*.nc'))
+
+            nc_files = sorted(glob.glob(os.path.join(local_file_path, "*Nowcast_rain*.nc")))
 
 
             shapefile_path = self.inputPathGrid + "/other/hybas_af_v1c_clipped.geojson"
 
             #hybas_ids = [1100830330, 1100833680, 1090830330, 1100830840, 1090830320, 1070803250, 1100833460, 1100831050]
+
             hybas_ids = list(set(int(hybas.hybasid) for hybas in self.data.threshold_basin.data_units))
 
             # Load NetCDF with xarray
             nc_path= nc_files[0]  # Assuming you want to process the first file
+
             ds = xr.open_dataset(nc_path)
             # Adjust variable name below if different
-            rain = ds["precip_intensity"]  # assume shape is (time, y, x) 
+            rain = ds["precip_accumulation"]  # assume shape is (time, y, x) 
 
             # Load and filter shapefile
             gd = gpd.read_file(shapefile_path)
@@ -379,7 +386,6 @@ class Extract:
         try:
             self.load.download_forecast_file(
                 base_dir,
-                target_datetime,
                 local_file_path
                 )
             
@@ -395,7 +401,7 @@ class Extract:
                 raise FileNotFoundError("No NetCDF file with 'floodmap' in the name found.")
                 
             nc_file = matches[0]
-            print(f"Found file: {nc_file}")
+            logging.info(f"Found file: {nc_file}")
 
             # Open the NetCDF file
             ds = xr.open_dataset(nc_file)
@@ -491,12 +497,13 @@ class Extract:
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d") 
-            flow_multiplier=100000 # Set multiplier for flow values, to simulate triggering of flood alerts
+            #flow_multiplier=1#100000 # Set multiplier for flow values, to simulate triggering of flood alerts for demo
+            flow_multiplier =self.settings.get_setting("discharge_multiplier")
 
         local_file_path = self.inputPathGrid +"/hydrology"
                    
         try:
-            local_files = glob.glob(os.path.join(local_file_path, "*discharge*"))          
+            local_files = glob.glob(os.path.join(local_file_path, "*wflow*"))          
      
             # Sort files based on timestamp (latest first)
             local_files.sort(reverse=True)
@@ -506,8 +513,12 @@ class Extract:
             ds = xr.open_dataset(most_recent_forecast)
             df = ds.to_dataframe().reset_index()
             df['station_names'] = df['station_names'].str.decode('utf-8')
+            #station names have changed in the wflow model, so we need to update them here
+            # e.g., dire_dawa to wflow_dire_dawa    
+            df['station_names'] = df['station_names'].str.lower().str.replace('dire_dawa', 'wflow_dire_dawa', regex=False)
             df['station_id'] = df['station_id'].str.decode('utf-8') 
-            df['delta'] = df['analysis_time'] - df['time']
+            #df['delta'] = df['analysis_time'] - df['time']
+            df['delta'] = df['time'] - df['analysis_time']
             df['lead_time'] = df['delta'].dt.total_seconds() / 3600  # Convert to hours 
             df['lead_time'] = df['lead_time'].astype(int)
             df['Q'] = df['Q'] * flow_multiplier  # Apply flow multiplier
@@ -523,7 +534,6 @@ class Extract:
                     logging.info(f"Processing station: {st_name} for admin level {admin_level}")           
                     
                     for lead_time in [1, 2, 3, 6, 12]: 
-                        logging.warning(f"Admin level {admin_level} not found in discharge_admin levels for leadtime {lead_time} ") 
                         df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")    
                         max_value =  np.nanmax(df_station['Q'].values)
                         self.data.discharge_station.upsert_data_unit(
@@ -537,7 +547,7 @@ class Extract:
                         )             
 
                         for pcode in pcodes:
-                            logging.warning(f"Admin level {admin_level} for leadtime {lead_time} for pcode {pcode} s") 
+                            #logging.info(f"Admin level {admin_level} for leadtime {lead_time} for pcode {pcode} s") 
                             self.data.discharge_admin.upsert_data_unit(
                                 DischargeDataUnit(
                                     adm_level=admin_level,

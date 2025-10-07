@@ -41,7 +41,7 @@ from azure.core.exceptions import ResourceNotFoundError
 from ftplib import FTP_TLS
 import os
 import re
-
+import shutil
 
 
 
@@ -194,11 +194,88 @@ class Load:
         )
         self.secrets = secrets
 
-    
+
+
+    def extract_start_time(self, filename):
+        """
+        Extract timestamps (start and optional secondary) from filename.
+
+        Supports:
+            - YYYYMMDD_HHMM   → e.g. 20251006_0730
+            - YYYYMMDDTHHMMSS → e.g. 20251006T073000
+
+        Returns:
+            dict: {
+                'start_time': datetime or None,
+                'secondary_time': datetime or None,
+                'all_times': [list of all parsed datetime objects]
+            }
+        """
+        # Match either YYYYMMDD_HHMM or YYYYMMDDTHHMMSS
+        timestamp_pattern = r'\d{8}[_T]\d{4,6}'
+        matches = re.findall(timestamp_pattern, filename)
+
+        parsed_times = []
+        
+        for ts in matches:
+            try:
+                if 'T' in ts:
+                    # Format like 20251006T073000
+                    parsed_times.append(datetime.strptime(ts, "%Y%m%dT%H%M%S"))
+                elif '_' in ts:
+                    # Format like 20251006_0730 or 20251006_073000
+                    fmt = "%Y%m%d_%H%M" if len(ts.split('_')[1]) == 4 else "%Y%m%d_%H%M%S"
+                    parsed_times.append(datetime.strptime(ts, fmt))
+            except ValueError:
+                continue
+
+        start_time = parsed_times[0] if len(parsed_times) >= 1 else None
+        secondary_time = parsed_times[1] if len(parsed_times) >= 2 else None
+
+        return start_time 
+
+
+    def get_latest_file(self, file_list):
+        """Return the file with the latest start timestamp."""
+
+        dated_files = [
+            (f, self.extract_start_time(f))
+            for f in file_list
+            if self.extract_start_time(f)
+        ]
+        if not dated_files:
+            return None
+        latest_file = max(dated_files, key=lambda x: x[1])[0]
+        return latest_file
+
+    def get_latest_file_from_dict(self, file_dict):
+        """Return the file with the latest start timestamp."""
+        latestfile_dict={}
+
+        for file_key,file_list in file_dict.items():
+ 
+            dated_files = [
+                (f, self.extract_start_time(f))
+                for f in file_list
+                if self.extract_start_time(f)
+            ]
+
+            if not dated_files:
+                continue
+            latest_file = max(dated_files, key=lambda x: x[1])[0]
+            localfilenam= max(dated_files, key=lambda x: x[1])[1]  
+
+            localfilename=file_key+ f"_{localfilenam.strftime('%Y%m%d%H%M')}.nc"
+            latestfile_dict[file_key]=[localfilename, latest_file]  
+
+        return latestfile_dict
+
+       
+
+
 
     def download_forecast_file(self,
         base_dir: str,
-        target_datetime: datetime,
         save_path: str,
     ):
         """
@@ -213,7 +290,7 @@ class Load:
 
         host = self.secrets.get_secret("DELTARES_FTP_URL")
         ftps = FTP_TLS()
-        ftps.connect(host=host, port=21)  # Explicitly specify port  
+        ftps.connect(host=host, port=990)  # Explicitly specify port  
 
         ftps.login(
             user=self.secrets.get_secret("DELTARES_FTP_USER"),
@@ -222,64 +299,68 @@ class Load:
 
         ftps.prot_p()  # Switch to secure data connection
 
-        subfolder = target_datetime.strftime("%Y%m%d")
-        folder_path = f"/{base_dir}/{subfolder}"
+        #subfolder = target_datetime.strftime("%Y%m%d")
+        folder_path = f"/{base_dir}"
 
         logging.info(f"Navigating to {folder_path}")
         try:
             ftps.cwd(folder_path)
             files = ftps.nlst()
 
-            # Filter files by the given pattern (case insensitive)
-            target_files = files #[f for f in files if file_pattern.lower() in f.lower()]
-
-            if not target_files:
-                logging.warning(f"No files found")
-                return
-
-            # Sort files based on timestamp (latest first)
-            target_files.sort(reverse=True)
-
-            # The most recent file is the first in the sorted list
-            most_recent_file = target_files[0]
-            logging.info(f"Most recent file found: {most_recent_file}")
-
-            # Split the filename and extract the timestamp
-            parts = most_recent_file.split('_')
-            timestamps = [part for part in parts if re.match(timestamp_pattern, part)]
-
-            if not timestamps:
-                logging.warning(f"No valid timestamp found in filename: {most_recent_file}")
+            if not files:
+                logging.warning("No files found in directory.")
                 return
             
-            # Use the first timestamp found in the filename
-            timestamp = timestamps[0]
-            logging.info(f"Extracted timestamp: {timestamp}")
-
-            # Filter files by the extracted timestamp
-            update_target_files = [f for f in files if timestamp in f]
-
-            if not update_target_files:
-                logging.warning(f"No files found with the extracted timestamp {timestamp}")
+            # Filter observation and nowcast files
+            if base_dir=="Meteorology":
+                obs_files = [f for f in files if "Observation" in f ]
+                now_files = [f for f in files if "Nowcast" in f ]
+                fname_annex=["Observation_rain","Nowcast_rain"]
+                files_dict={"Observation_rain":obs_files,"Nowcast_rain":now_files}  
+            elif base_dir=="Hydrology":
+                obs_files = [f for f in files if "floodmap" in f]
+                now_files = [f for f in files if "wflow" in f]
+                fname_annex=["floodmap","wflow"]
+                files_dict={"floodmap":obs_files,"wflow":now_files}
+            else:
+                logging.error("Correct directory should be specified to find files.")
                 return
 
-            for file in update_target_files:
-                logging.info(f"Found file matching timestamp: {file}")
 
-                local_file_path = os.path.join(save_path, file)
-                logging.warning(f"Downloading latest file: {file} to {local_file_path}...")
+            latest_obs = self.get_latest_file(obs_files)
+            latest_now = self.get_latest_file(now_files)
+
+            # [localfilename, latest_file]
+            latest_files_dict=self.get_latest_file_from_dict(files_dict)
+            for key, value in latest_files_dict.items():
+                logging.info(f"Latest file for {key}: {value[1]} with local filename {value[0]}")  
+                local_file_path = os.path.join(save_path, value[0])
+                logging.info(f"Downloading latest {key} file: {value[1]} → {local_file_path}")
+
+                with open(local_file_path, 'wb') as f:
+                    ftps.retrbinary(f"RETR {value[1]}", f.write)
+
+                logging.info(f"{key} file download complete: {value[1]}")
+
+            ''' 
+            for label, file in [(fname_annex[0], latest_obs), (fname_annex[1], latest_now)]:
+                if not file:
+                    logging.warning(f"No {label} file found.")
+                    continue
+
+                local_file_path = os.path.join(save_path, label+".nc")
+                logging.info(f"Downloading latest {label} file: {file} → {local_file_path}")
 
                 with open(local_file_path, 'wb') as f:
                     ftps.retrbinary(f"RETR {file}", f.write)
 
-                logging.info("Download complete.")
+                logging.info(f"{label} file download complete: {file}")
+            '''
 
         except Exception as e:
             logging.warning(f"Failed to download: {e}")
         finally:
             ftps.quit()
-
-
 
     def get_population_density(self, country: str, file_path: str):
         """Get population density data from worldpop and save to file_path"""

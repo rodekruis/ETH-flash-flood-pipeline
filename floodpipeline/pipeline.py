@@ -30,6 +30,8 @@ class Pipeline:
         self.data = PipelineDataSets(country=country, settings=settings)
         self.output_data_path: str = "data/output"
 
+        self.input_data_path: str = "data/input"
+
         self.data.threshold_admin = self.load.get_pipeline_data(
             data_type="threshold", country=self.country
         )
@@ -70,6 +72,15 @@ class Pipeline:
 
         # Recreate the empty folder
         os.makedirs(self.output_data_path)
+
+        # Delete old forecast files if it exists
+
+        for subfolder in ["meteorology", "hydrology"]:
+            path = os.path.join(self.input_data_path, subfolder)
+            if os.path.exists(path):
+                shutil.rmtree(path)             
+            # Recreate the folder
+            os.makedirs(path)
 
 
         if prepare:

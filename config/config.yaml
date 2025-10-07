@@ -1,13 +1,10 @@
 # configuration file for ibf flood pipeline
 
 floods:
-  global_flood_maps_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard
-  no_ensemble_members: 51  # number of ensemble members to consider
-  minimum_flood_depth: 0.1  # minimum flood depth in meters, to calculate affected population
-  glofas_threshold_url: https://confluence.ecmwf.int/display/CEMS/Auxiliary+Data
-  glofas_threshold_files: flood_threshold_glofas_v4_rl
+  minimum_flood_depth: 0.1  # minimum flood depth in meters, to calculate affected population 
   disaster_type: flash-floods
-  flood_var_name: z  # Change this if your variable name is different
+  flood_var_name: z  # in wflow model flood depth has variable name z Change this if your variable name is different
+  discharge_multiplier: 10000  # Set multiplier for discharge values, to simulate triggering of flood alerts for Demo 
 
 auxiliary:
   #worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
