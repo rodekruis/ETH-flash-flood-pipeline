@@ -421,7 +421,7 @@ class Extract:
             flood.rio.write_crs("EPSG:32637", inplace=True)
 
             # Load the subgrid DEM
-            da_dep = xr.open_dataarray(self.settings.get_setting("subgrid_dem_path")).sqeeuze()
+            da_dep = xr.open_dataarray(self.settings.get_setting("subgrid_dem_path")).squeeze()
 
             # Downscale floodmap to subgrid resolution
             flood_masked = hydromt_sfincs.utils.downscale_floodmap(
