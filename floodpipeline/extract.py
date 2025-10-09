@@ -28,6 +28,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 import rioxarray
 import shutil
+import hydromt_sfincs
  
  
  
@@ -413,12 +414,24 @@ class Extract:
 
             flood = ds[flood_var_name]
 
-            # Use first time step if needed
-            if "time" in flood.dims:
-                flood = flood.isel(time=0)
+            # Get maximum flood depth over time
+            flood = flood.squeeze().max(dim='time')
+            
+            #Write the crs to the dataArray
+            flood.rio.write_crs("EPSG:32637", inplace=True)
 
-            # Apply depth threshold
-            flood_masked = flood.where(flood > depth_threshold)
+            # Load the subgrid DEM
+            da_dep = xr.open_dataarray(self.settings.get_setting("subgrid_dem_path")).squeeze()
+
+            # Downscale floodmap to subgrid resolution
+            flood_masked = hydromt_sfincs.utils.downscale_floodmap(
+                zsmax=flood,
+                dep=da_dep,
+                hmin=depth_threshold,
+                reproj_method = 'bilinear',
+            )
+
+
             data = np.nan_to_num(flood_masked.values, nan=0.0)
 
             # Use x and y coordinates
