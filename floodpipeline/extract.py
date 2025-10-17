@@ -304,62 +304,69 @@ class Extract:
 
             hybas_ids = list(set(int(hybas.hybasid) for hybas in self.data.threshold_basin.data_units))
 
-            # Load NetCDF with xarray
-            nc_path= nc_files[0]  # Assuming you want to process the first file
+            if nc_files:
+                #raise FileNotFoundError("No NetCDF file with 'Nowcast_rain' in the name found.")
+                #logging.error("No NetCDF file with 'Nowcast_rain' in the name found.")
+     
+            
+                # Load NetCDF with xarray
+                nc_path= nc_files[0]  # Assuming you want to process the first file
 
-            ds = xr.open_dataset(nc_path)
-            # Adjust variable name below if different
-            rain = ds["precip_accumulation"]  # assume shape is (time, y, x) 
+                ds = xr.open_dataset(nc_path)
+                # Adjust variable name below if different
+                rain = ds["precip_accumulation"]  # assume shape is (time, y, x) 
 
-            # Load and filter shapefile
-            gd = gpd.read_file(shapefile_path)
-            gdf = gd.query("HYBAS_ID in @hybas_ids")
-            results = {}
+                # Load and filter shapefile
+                gd = gpd.read_file(shapefile_path)
+                gdf = gd.query("HYBAS_ID in @hybas_ids")
+                results = {}
 
-            for label, count in interval_steps.items():
-                rain_interval = rain.isel(time=slice(0, count)).sum(dim="time")
-                da_rio = rain_interval.rio.write_crs("EPSG:4326")  # or use the correct CRS
+                for label, count in interval_steps.items():
+                    rain_interval = rain.isel(time=slice(0, count)).sum(dim="time")
+                    da_rio = rain_interval.rio.write_crs("EPSG:4326")  # or use the correct CRS
 
-                max_df={}
-                for hybas_id in hybas_ids:
-                    hybas_i = [hybas_id]
-                    filtered_gdf1 = gdf.query("HYBAS_ID in @hybas_i") 
-                    if not filtered_gdf1.empty:               
-                        # Clip raster with shapefile
-                        clipped = da_rio.rio.clip(filtered_gdf1.geometry, filtered_gdf1.crs, drop=True, all_touched=True,invert=False)             
-                        max_df[hybas_id] = np.nanmax(clipped.values)       
-                results[label] = max_df
-            # Add max values to GeoDataFrame
-            result_df= pd.DataFrame()
+                    max_df={}
+                    for hybas_id in hybas_ids:
+                        hybas_i = [hybas_id]
+                        filtered_gdf1 = gdf.query("HYBAS_ID in @hybas_i") 
+                        if not filtered_gdf1.empty:               
+                            # Clip raster with shapefile
+                            clipped = da_rio.rio.clip(filtered_gdf1.geometry, filtered_gdf1.crs, drop=True, all_touched=True,invert=False)             
+                            max_df[hybas_id] = np.nanmax(clipped.values)       
+                    results[label] = max_df
+                # Add max values to GeoDataFrame
+                result_df= pd.DataFrame()
 
-            for label in results:
-                result_df[f"max_{label}"] = np.max(np.array(results[label]), axis=0)
+                for label in results:
+                    result_df[f"max_{label}"] = np.max(np.array(results[label]), axis=0)
 
-            result_df['HYBAS_ID'] = result_df.index  
-            try:
-                for data_unit in self.data.threshold_basin.data_units:
-                    hybas_ids = data_unit.hybasid
-                    gdf_ = result_df.query("HYBAS_ID == @hybas_ids")
-                    for lead_time in [1, 2, 3, 6]: 
-                        #lead_time = data_unit.lead_time
-                        # Check if the basin exists in the GeoDataFrame 
-                        label = f"max_{lead_time}hr"
-                        if label in results:
-                            max_value = gdf_[f"max_{lead_time}hr"]
-                            self.data.basin_rainfall.upsert_data_unit(
-                                BasinDataSet(
-                                    hybasid=data_unit.hybasid,
-                                    hybalevel=data_unit.hybalevel,
-                                    lead_time=lead_time,
-                                    pcodes=data_unit.pcodes,
-                                    rainfall_ensemble=[max_value] if not pd.isna(max_value) else [0.0],
-                                    )
-                                )  
-            except FileNotFoundError:
-                logging.warning(
-                    f"extracting rainfall data  file failed"
-                    )   
-            logging.info("finished extracting rainfall data")
+                result_df['HYBAS_ID'] = result_df.index  
+                try:
+                    for data_unit in self.data.threshold_basin.data_units:
+                        hybas_ids = data_unit.hybasid
+                        gdf_ = result_df.query("HYBAS_ID == @hybas_ids")
+                        for lead_time in [1, 2, 3, 6]: 
+                            #lead_time = data_unit.lead_time
+                            # Check if the basin exists in the GeoDataFrame 
+                            label = f"max_{lead_time}hr"
+                            if label in results:
+                                max_value = gdf_[f"max_{lead_time}hr"]
+                                self.data.basin_rainfall.upsert_data_unit(
+                                    BasinDataSet(
+                                        hybasid=data_unit.hybasid,
+                                        hybalevel=data_unit.hybalevel,
+                                        lead_time=lead_time,
+                                        pcodes=data_unit.pcodes,
+                                        rainfall_ensemble=[max_value] if not pd.isna(max_value) else [0.0],
+                                        )
+                                    )  
+                except FileNotFoundError:
+                    logging.warning(
+                        f"extracting rainfall data  file failed"
+                        )   
+                logging.info("finished extracting rainfall data")
+            else:
+                logging.error("No NetCDF file with 'Nowcast_rain' in the name found.")
         
 
     def prepare_wflow_data(self, country: str = None, debug: bool = False):
@@ -378,6 +385,7 @@ class Extract:
             target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
 
         local_file_path = self.inputPathGrid +"/hydrology"
+        subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
 
         if not os.path.exists(local_file_path):
             os.makedirs(local_file_path)
@@ -406,22 +414,58 @@ class Extract:
 
             # Open the NetCDF file
             ds = xr.open_dataset(nc_file)
+            ds_squeezed = ds.squeeze(dim="realization", drop=True)
 
 
             # Ensure the flood depth variable exists
             if flood_var_name not in ds:
                 raise KeyError(f"Variable '{flood_var_name}' not found in the dataset.")
 
-            flood = ds[flood_var_name]
+            flood = ds_squeezed[flood_var_name]
 
-            # Get maximum flood depth over time
-            flood = flood.squeeze().max(dim='time')
+            # Compute max flood depth lazily (parallelized)
+            flood_max = flood.max(dim="time")
+
+            flood_max = flood_max.rio.write_crs("EPSG:32637", inplace=True)       
+
+            flood_mask = flood_max.where(flood_max >= depth_threshold)
+
+            # Trigger actual computation only at the end
+            flood_mask = flood_mask.compute()
             
             #Write the crs to the dataArray
             flood.rio.write_crs("EPSG:32637", inplace=True)
 
             # Load the subgrid DEM
-            da_dep = xr.open_dataarray(self.settings.get_setting("subgrid_dem_path")).squeeze()
+            with rasterio.open(subgrid_dem_path) as src:
+                data = src.read(1)  # read first band
+                transform = src.transform
+                crs = src.crs
+                height, width = data.shape
+
+                # Compute x and y coordinate arrays from affine transform
+                x_coords = [transform * (i + 0.5, 0.5) for i in range(width)]
+                y_coords = [transform * (0.5, j + 0.5) for j in range(height)]
+
+                # x_coords and y_coords are (x, y) tuples; take the components
+                x_coords = [x for x, y in x_coords]
+                y_coords = [y for x, y in y_coords]
+
+                # Build DataArray with CRS and transform metadata
+                da_dep = xr.DataArray(
+                    data,
+                    dims=("y", "x"),
+                    coords={"x": x_coords, "y": y_coords},
+                    attrs={
+                        "crs": crs.to_string(),
+                        "transform": transform
+                    },
+                    name="DEM"
+                )
+
+                # Enable rioxarray spatial accessors (optional but recommended)
+                da_dep = da_dep.rio.write_crs(crs, inplace=True)
+                da_dep = da_dep.rio.write_transform(transform, inplace=True)
 
             # Downscale floodmap to subgrid resolution
             flood_masked = hydromt_sfincs.utils.downscale_floodmap(

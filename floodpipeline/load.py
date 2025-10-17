@@ -318,8 +318,8 @@ class Load:
                 fname_annex=["Observation_rain","Nowcast_rain"]
                 files_dict={"Observation_rain":obs_files,"Nowcast_rain":now_files}  
             elif base_dir=="Hydrology":
-                obs_files = [f for f in files if "floodmap" in f]
-                now_files = [f for f in files if "wflow" in f]
+                obs_files = [f for f in files if "floodmap" in f and "forecast" in f]
+                now_files = [f for f in files if "wflow" in f and "forecast" in f]
                 fname_annex=["floodmap","wflow"]
                 files_dict={"floodmap":obs_files,"wflow":now_files}
             else:
@@ -593,7 +593,8 @@ class Load:
                     station_code, trigger_on_lead_time
                 ).station_name
 
-                event_name = event_id + "_" + str(lead_time_event)  #str(station_name) if station_name[-1] else str(station_code)
+                #event_name = event_id + "_" + str(lead_time_event)  #str(station_name) if station_name[-1] else str(station_code)
+                event_name = event_id + "Date" + str(lead_time_event) + "hr" #str(station_name) if station_name[-1] else str(station_code)
 
                 if event_name == "" or event_name == "None" or event_name == "Na":
                     event_name = str(station_code)
@@ -676,7 +677,11 @@ class Load:
                         "eapAlertClass": [],
                         "forecastReturnPeriod": [],
                         "triggerLevel": [],
+                        "water-level": [],
+                        "water-level-reference": [],
+                        "water-level-previous": [],
                     }
+
                     discharge_station = discharge_station_data.get_data_unit(
                         station_code, lead_time_event
                     )
@@ -696,6 +701,18 @@ class Load:
                                     trigger_on_return_period
                                 )
                             )
+                        elif indicator == "water-level-reference":
+                            value = int(
+                                threshold_station.get_threshold(
+                                    trigger_on_return_period
+                                )
+                            )
+                        elif indicator == "water-level-previous":
+                            value = 0
+                        elif indicator == "water-level":
+                            value = int(discharge_station.discharge_mean or 0)
+
+
                         station_data = {"fid": station_code[-1], "value": value}
                         station_forecasts[indicator].append(station_data)
                         body = {

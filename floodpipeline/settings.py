@@ -38,13 +38,13 @@ class Settings:
                     for i in range(len(self.settings[key])):
                         if setting in self.settings[key][i].keys():
                             setting_value = self.settings[key][i][setting]
-        if not setting_value:
+        if setting_value is None:
             raise ValueError(f"Setting {setting} not found in {self.setting_path}")
         return setting_value
 
     def get_country_setting(self, country: str, setting: str):
         country_setting = next(
-            x for x in self.get_setting("countries") if x["name"] == country
+            (x for x in self.get_setting("countries") if x["name"] == country), None
         )
         if not country_setting:
             raise ValueError(f"Country {country} not found in {self.setting_path}")
