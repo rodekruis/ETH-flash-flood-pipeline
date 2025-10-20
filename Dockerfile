@@ -44,7 +44,8 @@ COPY floodpipeline /floodpipeline
 COPY config /config
 # Create the target directories inside the container
 RUN mkdir -p /data/input /data/output 
-#COPY data /data
+
+COPY data /data
 COPY "flood_pipeline.py" .
 #COPY "run_scenario.py" .
 
