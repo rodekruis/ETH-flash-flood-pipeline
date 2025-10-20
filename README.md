@@ -22,7 +22,7 @@ Dependency python>=3.11,<3.12
    ```
 3. Run the pipeline : `python flood_pipeline.py` or `poetry run python flood_pipeline.py` with relevant arguments below.
    ```
-   Usage: drought_pipeline.py [OPTIONS]
+   Usage: flood_pipeline.py [OPTIONS]
 
    Options:
      --country TEXT        country ISO3
@@ -42,7 +42,7 @@ Dependency python>=3.11,<3.12
    ```
 ### Option 2: With Docker Compose
 
-To run the drought pipeline for testing using Docker Compose, follow these steps:
+To run the flash food pipeline for testing using Docker Compose, follow these steps:
 
 1. Ensure you have Docker and Docker Compose installed on your machine.
 
