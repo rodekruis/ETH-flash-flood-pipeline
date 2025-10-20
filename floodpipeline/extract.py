@@ -59,8 +59,8 @@ class Extract:
         self.country = None
         self.secrets = None
         self.settings = None
-        self.inputPathGrid = "./data/input"
-        self.outputPathGrid = "./data/output"
+        self.inputPathGrid = "data/input"
+        self.outputPathGrid = "data/output"
         self.load = Load()
         if not os.path.exists(self.inputPathGrid):
             os.makedirs(self.inputPathGrid)
@@ -386,6 +386,7 @@ class Extract:
 
         local_file_path = self.inputPathGrid +"/hydrology"
         subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
+       
 
         if not os.path.exists(local_file_path):
             os.makedirs(local_file_path)
@@ -437,6 +438,7 @@ class Extract:
             flood.rio.write_crs("EPSG:32637", inplace=True)
 
             # Load the subgrid DEM
+            subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
             with rasterio.open(subgrid_dem_path) as src:
                 data = src.read(1)  # read first band
                 transform = src.transform

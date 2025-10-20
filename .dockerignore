@@ -6,7 +6,7 @@
 .idea
 *.sublime-project
 *.sublime-workspace
-pipeline/data/*
+#pipeline/data/*
 pipeline/static data/*
 
 
