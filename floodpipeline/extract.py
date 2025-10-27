@@ -621,4 +621,4 @@ class Extract:
             logging.warning(
                 f"extracting flow data file failed"
             )        
-        logging.info("finished preparing wflow data")
+        logging.info("finished extracting wflow data")
