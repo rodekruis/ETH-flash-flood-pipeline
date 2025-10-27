@@ -16,12 +16,7 @@
 
 
 # Local data files
-pipeline/data/*
- 
- 
-#!pipeline/data/README.md
-#!pipeline/data/
-pipeline/static data/*
+/data/*
 
 
 # Generated files
