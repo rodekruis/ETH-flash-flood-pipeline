@@ -471,7 +471,7 @@ class PipelineDataSets:
             country=self.country, 
             timestamp=datetime.today()
         )        
-        self.rainfall_basin = BasinDataSet(
+        self.basin_rainfall = BasinDataSet(
             country=country,
             timestamp=datetime.today()
         )        
