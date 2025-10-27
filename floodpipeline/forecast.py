@@ -142,7 +142,6 @@ class Forecast:
         self.input_data_path: str = "data/input"
         self.output_data_path: str = "data/output"
         self.flood_extent_raster: str = self.output_data_path + "/flood_extent.tif"
-        #self.flood_extent_raster: str = self.input_data_path + "/hydrology/flood_extent.tif"
         self.pop_raster: str = self.input_data_path + "/population_density.tif"
         self.aff_pop_raster: str = self.output_data_path + "/affected_population.tif"
         self.data = data
@@ -359,7 +358,7 @@ class Forecast:
     def __compute_affected_pop_raster(self):
         """Compute affected population raster given a flood extent"""
         country = self.data.forecast_admin.country
-        
+
         # get population density raster
         self.load.get_population_density(country, self.pop_raster)
         flood_shapes = []
