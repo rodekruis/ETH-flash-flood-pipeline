@@ -64,7 +64,7 @@ You can modify the `command` section in the `docker-compose.yml` file to change 
 
 | Option         | Description                                                             | Example                                    |
 |----------------|-------------------------------------------------------------------------|--------------------------------------------|
-| `--country`    | ISO3 code for the target country                                         | `--country KEN`                             |
+| `--country`    | ISO3 code for the target country                                         | `--country ETH`                             |
 | `--prepare`    | Download and prepare input data (admin boundaries, shapefiles, etc.)     | `--prepare`                                 |
 | `--extract`    | Download and process forecast data (e.g., rainfall, discharge)           | `--extract`                                 |
 | `--forecast`   | Run flood forecasting logic (triggers, alerts, affected population)      | `--forecast`                                |
@@ -145,11 +145,22 @@ Create a `.env` file for secrets:
 
 ```dotenv
 # .env
-DELTARES_FTP_USER=your_user
-DELTARES_FTP_PASSWORD=your_pass
-AZURE_BLOB_KEY=...
-COSMOS_DB_KEY=...
-IBF_API_TOKEN=...
+COSMOS_URL="..."
+COSMOS_KEY="..."
+BLOB_ACCOUNT_NAME="..."
+BLOB_ACCOUNT_KEY="..."
+
+IBF_API_URL="..."
+IBF_API_USER="..."
+IBF_API_PASSWORD="..."
+
+DELTARES_FTP_URL="..."
+DELTARES_FTP_USER="..."
+DELTARES_FTP_PASSWORD="..."
+
+GLOSSIS_FTP="..."
+GLOSSIS_USER="..."
+GLOSSIS_PW="..."
 ```
 
 ---
