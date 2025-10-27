@@ -594,7 +594,8 @@ class Extract:
                     
                     for lead_time in [1, 2, 3, 6, 12]: 
                         df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")    
-                        max_value =  np.nanmax(df_station['Q'].values)
+                        max_value =  float(np.nanmax(df_station['Q'].values))
+
                         self.data.discharge_station.upsert_data_unit(
                             DischargeStationDataUnit(
                                 station_code=data_unit.station_code,
