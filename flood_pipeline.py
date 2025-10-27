@@ -6,7 +6,7 @@ import click
 
 
 @click.command()
-@click.option("--country", help="country ISO3", default="UGA")
+@click.option("--country", help="country ISO3", default="ETH")
 @click.option("--prepare", help="prepare data", default=False, is_flag=True)
 @click.option("--extract", help="extract data", default=False, is_flag=True)
 @click.option("--forecast", help="forecast floods", default=False, is_flag=True)
