@@ -9,29 +9,19 @@ from floodpipeline.data import (
 from floodpipeline.load import Load
 import os
 from datetime import datetime, timedelta
-import time
 import geopandas as gpd
 import pandas as pd
 import xarray as xr
 from rasterstats import zonal_stats
 import rasterio
 import logging
-import itertools
-from typing import List
-import urllib.request
-import ftplib
-import copy 
 import glob 
 import numpy as np
 import xarray as xr
 from rasterio.transform import from_origin
 from rasterio.warp import calculate_default_transform, reproject, Resampling
-import rioxarray
-import shutil
 import hydromt_sfincs
- 
- 
- 
+
 
 supported_sources = ["DELTARES"]
 
@@ -64,13 +54,8 @@ class Extract:
         self.load = Load()
         if not os.path.exists(self.inputPathGrid):
             os.makedirs(self.inputPathGrid)
-        
         if not os.path.exists(self.outputPathGrid):
             os.makedirs(self.outputPathGrid)
-
-
-
-
         if settings is not None:
             self.set_settings(settings)
             self.load.set_settings(settings)
@@ -129,11 +114,7 @@ class Extract:
             self.prepare_hkvrain_data()
             self.extract_hkvrain_data_nc()
             self.prepare_wflow_data()
-            self.extract_wflow_data()           
-
-
-    
-
+            self.extract_wflow_data()
 
     def prepare_hkvrain_data(self, country: str = None, debug: bool = False):
         """
@@ -146,7 +127,6 @@ class Extract:
         country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)    
         target_datetime=datetime.today() 
         if debug:
-            #target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")
             target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
         local_file_path = self.inputPathGrid +"/meteorology"
 
@@ -167,8 +147,6 @@ class Extract:
 
     def extract_hkvrain_data_tiff(self, country: str = None, debug: bool = False):
         """
-   
-      
         Compute maximum cumulative rainfall over 1hr, 3hr, and 6hr intervals
         for selected polygons from a shapefile using zonal statistics.
 
@@ -189,7 +167,6 @@ class Extract:
                     stack.append(src.read(1))
                     profile = src.profile
             return np.sum(stack, axis=0), profile
-        
 
         # Define intervals in number of 15-min steps
         intervals = {'1hr': 4,'2hr':8, '3hr': 12, '6hr': 24}
@@ -198,18 +175,16 @@ class Extract:
             country = self.country
         logging.info(f"start extract rainfall data for country {country}")
 
-        country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)    
-        target_datetime=datetime.today() 
+        country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)
+        target_datetime = datetime.today()
         if debug:
-            target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")
-        local_file_path = self.inputPathGrid +"/meteorology"
+            target_datetime = (datetime.today() - timedelta(days=1))
+        local_file_path = self.inputPathGrid + "/meteorology"
+
         # Load and sort TIF files
         tif_files = sorted(glob.glob(os.path.join(local_file_path, "*.tif")))
-
         tif_folder = local_file_path
         shapefile_path = self.inputPathGrid + "/other/hybas_af_v1c_clipped.geojson"
-
-        #hybas_ids = [1100830330, 1100833680, 1090830330, 1100830840, 1090830320, 1070803250, 1100833460, 1100831050]
         hybas_ids = list(set(int(hybas.hybasid) for hybas in self.data.threshold_basin.data_units))
 
         # Load and filter shapefile
@@ -262,7 +237,7 @@ class Extract:
         logging.info("finished extracting rainfall data")
 
     def extract_hkvrain_data_nc(self, country: str = None, debug: bool = False):
-            """        
+            """
             Compute maximum cumulative rainfall over 1hr, 3hr, and 6hr intervals
             for selected polygons from a shapefile using zonal statistics.
 
@@ -273,42 +248,28 @@ class Extract:
 
             Returns:
                 geopandas.GeoDataFrame: Updated GeoDataFrame with max_1hr, max_3hr, max_6hr columns.
-            """    
+            """
             
             # Define intervals in number of 15-min steps
-        
-            interval_steps = {'1hr': 4,'2hr':8, '3hr': 12, '6hr': 24} 
+            interval_steps = {'1hr': 4,'2hr':8, '3hr': 12, '6hr': 24}
+
             if country is None:
                 country = self.country
             logging.info(f"start extract rainfall data for country {country}")
-   
-            target_datetime=datetime.today() 
-       
+
+            target_datetime = datetime.today()
 
             if debug:
-                #target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")
                 target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
-                
 
-            local_file_path = self.inputPathGrid +"/meteorology"
+            local_file_path = self.inputPathGrid + "/meteorology"
 
             # Load and sort TIF files
-            #nc_files = glob.glob(os.path.join(local_file_path, '*Nowcast_rain*.nc'))
-
             nc_files = sorted(glob.glob(os.path.join(local_file_path, "*Nowcast_rain*.nc")))
-
-
             shapefile_path = self.inputPathGrid + "/other/hybas_af_v1c_clipped.geojson"
-
-            #hybas_ids = [1100830330, 1100833680, 1090830330, 1100830840, 1090830320, 1070803250, 1100833460, 1100831050]
-
             hybas_ids = list(set(int(hybas.hybasid) for hybas in self.data.threshold_basin.data_units))
 
             if nc_files:
-                #raise FileNotFoundError("No NetCDF file with 'Nowcast_rain' in the name found.")
-                #logging.error("No NetCDF file with 'Nowcast_rain' in the name found.")
-     
-            
                 # Load NetCDF with xarray
                 nc_path= nc_files[0]  # Assuming you want to process the first file
 
@@ -359,7 +320,7 @@ class Extract:
                                         pcodes=data_unit.pcodes,
                                         rainfall_ensemble=[max_value] if not pd.isna(max_value) else [0.0],
                                         )
-                                    )  
+                                    )
                 except FileNotFoundError:
                     logging.warning(
                         f"extracting rainfall data  file failed"
@@ -367,7 +328,7 @@ class Extract:
                 logging.info("finished extracting rainfall data")
             else:
                 logging.error("No NetCDF file with 'Nowcast_rain' in the name found.")
-        
+
 
     def prepare_wflow_data(self, country: str = None, debug: bool = False):
         """
@@ -377,33 +338,28 @@ class Extract:
             country = self.country
         logging.info(f"start preparing rainfall data for country {country}")
 
-
         target_datetime = datetime.today()#.strftime("%Y%m%d")
 
         if debug:
-            #target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d")      
             target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
 
         local_file_path = self.inputPathGrid +"/hydrology"
         subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
-       
 
         if not os.path.exists(local_file_path):
             os.makedirs(local_file_path)
 
         base_dir= "Hydrology" 
-                   
+
         try:
             self.load.download_forecast_file(
                 base_dir,
                 local_file_path
                 )
             
-            # Settings       
-
+            # Settings
             depth_threshold =self.settings.get_setting("minimum_flood_depth")
             flood_var_name = self.settings.get_setting("flood_var_name") # Change this if your variable name is different
-
 
             # Find the first NetCDF file with "flood" in the filename
             matches = glob.glob(os.path.join(local_file_path, '*floodmap*.nc'))
@@ -417,7 +373,6 @@ class Extract:
             ds = xr.open_dataset(nc_file)
             ds_squeezed = ds.squeeze(dim="realization", drop=True)
 
-
             # Ensure the flood depth variable exists
             if flood_var_name not in ds:
                 raise KeyError(f"Variable '{flood_var_name}' not found in the dataset.")
@@ -426,9 +381,7 @@ class Extract:
 
             # Compute max flood depth lazily (parallelized)
             flood_max = flood.max(dim="time")
-
             flood_max = flood_max.rio.write_crs("EPSG:32637", inplace=True)       
-
             flood_mask = flood_max.where(flood_max >= depth_threshold)
 
             # Trigger actual computation only at the end
@@ -476,7 +429,6 @@ class Extract:
                 hmin=depth_threshold,
                 reproj_method = 'bilinear',
             )
-
 
             data = np.nan_to_num(flood_masked.values, nan=0.0)
 
@@ -533,12 +485,10 @@ class Extract:
             ) as dst:
                 dst.write(dst_data, 1)
 
-
-
         except FileNotFoundError:
             logging.warning(
                 f"downloading hydrology data file failed"
-            )        
+            )
         logging.info("finished preparing wflow data")
 
     def extract_wflow_data(self, country: str = None, debug: bool = False):
@@ -550,20 +500,18 @@ class Extract:
 
         logging.info(f"start extracting wflow data for country {country}")   
 
-        target_datetime = datetime.today()#.strftime("%Y%m%d")
-
-        flow_multiplier=1 # Set multiplier for flow values, to simulate triggering of flood alerts
+        target_datetime = datetime.today()
+        flow_multiplier = 1 # Set multiplier for flow values, to simulate triggering of flood alerts
 
         if debug:
-            target_datetime = (datetime.today() - timedelta(days=1))#.strftime("%Y%m%d") 
-            #flow_multiplier=1#100000 # Set multiplier for flow values, to simulate triggering of flood alerts for demo
-            flow_multiplier =self.settings.get_setting("discharge_multiplier")
+            target_datetime = (datetime.today() - timedelta(days=1))
+            flow_multiplier = self.settings.get_setting("discharge_multiplier")
 
-        local_file_path = self.inputPathGrid +"/hydrology"
-                   
+        local_file_path = self.inputPathGrid + "/hydrology"
+
         try:
-            local_files = glob.glob(os.path.join(local_file_path, "*wflow*"))          
-     
+            local_files = glob.glob(os.path.join(local_file_path, "*wflow*"))
+
             # Sort files based on timestamp (latest first)
             local_files.sort(reverse=True)
 
@@ -572,30 +520,25 @@ class Extract:
             ds = xr.open_dataset(most_recent_forecast)
             df = ds.to_dataframe().reset_index()
             df['station_names'] = df['station_names'].str.decode('utf-8')
+
             #station names have changed in the wflow model, so we need to update them here
             # e.g., dire_dawa to wflow_dire_dawa    
             df['station_names'] = df['station_names'].str.lower().str.replace('dire_dawa', 'wflow_dire_dawa', regex=False)
             df['station_id'] = df['station_id'].str.decode('utf-8') 
-            #df['delta'] = df['analysis_time'] - df['time']
             df['delta'] = df['time'] - df['analysis_time']
             df['lead_time'] = df['delta'].dt.total_seconds() / 3600  # Convert to hours 
             df['lead_time'] = df['lead_time'].astype(int)
             df['Q'] = df['Q'] * flow_multiplier  # Apply flow multiplier
 
-            #admin_level=self.data.discharge_admin.adm_levels
-
             for admin_level in self.data.discharge_admin.adm_levels:
                 for data_unit in self.data.threshold_station.data_units:
-                    pcodes= data_unit.pcodes[f'{admin_level}']                      
-                     
+                    pcodes= data_unit.pcodes[f'{admin_level}']
                     st_name = data_unit.station_name
-
-                    logging.info(f"Processing station: {st_name} for admin level {admin_level}")           
+                    logging.info(f"Processing station: {st_name} for admin level {admin_level}")
                     
                     for lead_time in [1, 2, 3, 6, 12]: 
-                        df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")    
+                        df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")
                         max_value =  float(np.nanmax(df_station['Q'].values))
-
                         self.data.discharge_station.upsert_data_unit(
                             DischargeStationDataUnit(
                                 station_code=data_unit.station_code,
@@ -604,21 +547,20 @@ class Extract:
                                 lead_time=lead_time,
                                 discharge_ensemble=[max_value],
                             )
-                        )             
+                        )
 
                         for pcode in pcodes:
-                            #logging.info(f"Admin level {admin_level} for leadtime {lead_time} for pcode {pcode} s") 
                             self.data.discharge_admin.upsert_data_unit(
                                 DischargeDataUnit(
                                     adm_level=admin_level,
                                     pcode=pcode,
-                                    lead_time=lead_time,                       
+                                    lead_time=lead_time,
                                     discharge_ensemble=[max_value],
                                 )
-                            )         
+                            )
 
         except FileNotFoundError:
             logging.warning(
                 f"extracting flow data file failed"
-            )        
+            )
         logging.info("finished extracting wflow data")

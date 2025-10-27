@@ -7,7 +7,6 @@ from floodpipeline.data import (
     ForecastStationDataUnit,
 )
 from floodpipeline.load import Load
-from datetime import datetime
 from typing import List
 from shapely import Polygon
 from shapely.geometry import shape
@@ -187,27 +186,21 @@ class Forecast:
         """Determine if trigger level is reached, its probability, and the alert class"""
 
         country = self.data.discharge_admin.country
-
         trigger_on_lead_time = self.settings.get_country_setting(
             country, "trigger-on-lead-time"
         )
-
         trigger_on_return_period = self.settings.get_country_setting(
             country, "trigger-on-return-period"
         )
-
         trigger_on_minimum_probability = self.settings.get_country_setting(
             country, "trigger-on-minimum-probability"
         )
-
         classify_alert_on = self.settings.get_country_setting(
             country, "classify-alert-on"
         )
-
         alert_on_return_period = self.settings.get_country_setting(
             country, "alert-on-return-period"
         )
-
         alert_on_minimum_probability = self.settings.get_country_setting(
             country, "alert-on-minimum-probability"
         )
@@ -216,7 +209,6 @@ class Forecast:
         # check river discharge self.data.discharge_admin
 
         for pcode in self.data.discharge_admin.get_pcodes():
-            #threshold_data_unit = self.data.threshold_admin.get_data_unit(pcode=pcode)
             for lead_time in self.data.discharge_admin.get_lead_times():
                 threshold_data_unit = self.data.threshold_admin.get_data_unit(pcode=pcode,lead_time= lead_time) 
                 # different trigger levels for different lead times
@@ -235,13 +227,9 @@ class Forecast:
                         discharge_data_unit.discharge_ensemble,
                     )
 
-                    #likelihood = 1 # this is a for deterministic forecast, so likelihood is 1
-                    likelihood= sum(threshold_checks) / len(discharge_data_unit.discharge_ensemble)
-
+                    likelihood = sum(threshold_checks) / len(discharge_data_unit.discharge_ensemble)
                     return_period = threshold["return_period"]
-
                     likelihood_per_return_period[return_period] = likelihood
-
                     forecasts.append(
                         FloodForecast(
                             return_period=return_period, likelihood=likelihood
@@ -289,41 +277,21 @@ class Forecast:
         """Compute flood extent raster"""
         # get country-wide flood extent rasters
         country = self.data.forecast_admin.country
-
-
-
         flood_rasters = {}
-        output_dir=self.input_data_path+'/hydrology'
+        output_dir = self.input_data_path+'/hydrology'
 
         # Loop through return periods and copy the file 
         # Here we are going to use a floodextent map developed for the actual event but keepinng the retun period logic 
-        # please replace this as it might not be needed 
-        for rp in  [5,10, 20, 50, 75, 100, 200, 500]:
+        # please replace this as it might not be needed
+        for rp in [5, 10, 20, 50, 75, 100, 200, 500]:
             output_filename = f"flood_map_{country.upper()}_RP{rp}.tif"
             output_path = os.path.join(output_dir, output_filename)
             shutil.copyfile(self.flood_extent_raster, output_path)
 
             flood_rasters[rp] = output_path
- 
-        ''' 
-        if os.path.exists(self.flood_extent_raster):
-            os.remove(self.flood_extent_raster)
-        for rp in [10, 20, 50, 75, 100, 200, 500]:
-            flood_raster_filepath = (
-                self.input_data_path + f"/flood_map_{country.upper()}_RP{rp}.tif"
-            )
-            if not os.path.exists(flood_raster_filepath):
-                self.load.get_from_blob(
-                    flood_raster_filepath,
-                    f"{self.settings.get_setting('blob_storage_path')}"
-                    f"/flood-maps/{country.upper()}/flood_map_{country.upper()}_RP{rp}.tif",
-                )
-            flood_rasters[rp] = flood_raster_filepath
-        '''
 
         # create empty raster
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
-
         with rasterio.open(list(flood_rasters.values())[0]) as src:
             flood_raster_data = src.read()
             flood_raster_data = np.empty(flood_raster_data.shape)
@@ -338,11 +306,8 @@ class Forecast:
         gdf_adm = self.load.get_adm_boundaries(
             self.data.forecast_admin.country, adm_lvl
         )
-
         gdf_adm.index = gdf_adm[f"adm{adm_lvl}_pcode"]
-
         for lead_time in self.data.forecast_admin.get_lead_times():
-
             raster_lead_time = self.flood_extent_raster.replace(
                 ".tif", f"_{lead_time}.tif"
             )
@@ -394,9 +359,9 @@ class Forecast:
     def __compute_affected_pop_raster(self):
         """Compute affected population raster given a flood extent"""
         country = self.data.forecast_admin.country
+        
         # get population density raster
         self.load.get_population_density(country, self.pop_raster)
-
         flood_shapes = []
         for lead_time in self.data.forecast_admin.get_lead_times():
             flood_raster_lead_time = self.flood_extent_raster.replace(
