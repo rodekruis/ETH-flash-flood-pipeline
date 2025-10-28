@@ -376,24 +376,21 @@ class Load:
             file.write(r.content)
 
     def get_adm_boundaries(self, country: str, adm_level: int) -> gpd.GeoDataFrame:
-        """Get administrative boundaries from IBF API"""
+        """Get admin areas from IBF API"""
         try:
-            with urllib.request.urlopen(
-                f"https://raw.githubusercontent.com/rodekruis/IBF-system/master/services/API-service/src/scripts/git-lfs/admin-boundaries/{country}_adm{adm_level}.json"
-            ) as url:
-                data = json.load(url)
-                for ix, record in enumerate(data["features"]):
-                    data["features"][ix]["geometry"]["type"] = "MultiPolygon"
-                gdf = gpd.GeoDataFrame.from_features(data)
-                gdf.columns = map(str.lower, gdf.columns)
-                gdf.set_crs(epsg=4326, inplace=True)
+            adm_boundaries = self.ibf_api_get_request(
+                f"admin-areas/{country}/{adm_level}",
+            )
+            gdf_adm_boundaries = gpd.GeoDataFrame.from_features(
+                adm_boundaries["features"]
+            )
+            gdf_adm_boundaries.set_crs(epsg=4326, inplace=True)
         except HTTPError:
             raise FileNotFoundError(
-                f"Administrative boundaries for country {country} "
-                f"and admin level {adm_level} not found"
+                f"Admin areas for country {country}"
+                f" and admin level {adm_level} not found"
             )
-
-        return gdf
+        return gdf_adm_boundaries
 
     def __ibf_api_authenticate(self):
         no_attempts, attempt, login_response = 5, 0, None
