@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 RUN apt-get update && \
     apt-get install -y libexpat1 
-# install ODBC Driver for SQL Server
+
 RUN deps='curl gnupg gnupg2' && \
     apt-get update && \
     apt-get install -y $deps

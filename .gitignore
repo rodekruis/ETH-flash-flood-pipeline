@@ -16,7 +16,7 @@
 
 
 # Local data files
-/data/*
+data/*
 
 
 # Generated files
