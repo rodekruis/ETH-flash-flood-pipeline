@@ -712,7 +712,7 @@ class Load:
                         elif indicator == "water-level-alert-level":
                             value = forecast_station.alert_class
                             if event_type == "alert" and value == "max":
-                                value = "warning"
+                                value = "trigger"
                             elif event_type == "alert" and value =="med":
                                 value = "warning-medium"
                             elif event_type == "alert" and value == "min":
