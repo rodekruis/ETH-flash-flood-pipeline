@@ -677,6 +677,7 @@ class Load:
                         "water-level": [],
                         "water-level-reference": [],
                         "water-level-previous": [],
+                        "water-level-alert-level":[],
                     }
 
                     discharge_station = discharge_station_data.get_data_unit(
@@ -708,6 +709,16 @@ class Load:
                             value = 0
                         elif indicator == "water-level":
                             value = int(discharge_station.discharge_mean or 0)
+                        elif indicator == "water-level-alert-level":
+                            value = forecast_station.alert_class
+                            if event_type == "alert" and value == "max":
+                                value = "warning"
+                            elif event_type == "alert" and value =="med":
+                                value = "warning-medium"
+                            elif event_type == "alert" and value == "min":
+                                value = "warning-low"
+                            else:
+                                value = "none"
 
 
                         station_data = {"fid": station_code[-1], "value": value}
