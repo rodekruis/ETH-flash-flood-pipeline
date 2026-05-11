@@ -586,10 +586,8 @@ class Load:
                 # set as alert if lead time is greater than trigger_on_lead_time
                 if lead_time_event > trigger_on_lead_time and event_type == "trigger":
                     event_type = "alert"
-                station_name = forecast_station_data.get_data_unit(
-                    station_code, trigger_on_lead_time
-                ).station_name
 
+                # for now we set event name as station name but this can be changed to something else if needed
                 event_name = "Dire Dawa urban"
 
                 if event_name == "" or event_name == "None" or event_name == "Na":
