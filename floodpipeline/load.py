@@ -590,8 +590,7 @@ class Load:
                     station_code, trigger_on_lead_time
                 ).station_name
 
-                #event_name = event_id + "_" + str(lead_time_event)  #str(station_name) if station_name[-1] else str(station_code)
-                event_name = event_id + "Date" + str(lead_time_event) + "hr" #str(station_name) if station_name[-1] else str(station_code)
+                event_name = "Dire Dawa urban"
 
                 if event_name == "" or event_name == "None" or event_name == "Na":
                     event_name = str(station_code)
