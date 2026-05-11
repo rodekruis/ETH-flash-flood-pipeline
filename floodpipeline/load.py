@@ -587,7 +587,8 @@ class Load:
                 if lead_time_event > trigger_on_lead_time and event_type == "trigger":
                     event_type = "alert"
 
-                # for now we set event name as station name but this can be changed to something else if needed
+                # currently this flash flood is only enabled in one admin-area
+                # manually set event name as hardcoded admin-area name to follow existing flash flood logic
                 event_name = "Dire Dawa urban"
 
                 if event_name == "" or event_name == "None" or event_name == "Na":
