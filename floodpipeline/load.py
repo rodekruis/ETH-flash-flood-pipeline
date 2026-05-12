@@ -740,33 +740,6 @@ class Load:
 
                 processed_stations.append(station_code)
 
-            # send trigger per lead time: event/triggers-per-leadtime
-            triggers_per_lead_time = []
-            for lead_time in [1,2,3,6]:# range(0, 8):
-                is_trigger, is_trigger_or_alert = False, False
-                for lead_time_event, event_type in events.items():
-                    if event_type == "trigger" and lead_time >= lead_time_event:
-                        is_trigger = True
-                    if (
-                        event_type == "trigger" or event_type == "alert"
-                    ) and lead_time >= lead_time_event:
-                        is_trigger_or_alert = True
-                triggers_per_lead_time.append(
-                    {
-                        "leadTime": f"{lead_time}-day",
-                        "triggered": is_trigger_or_alert,
-                        "thresholdReached": is_trigger,
-                    }
-                )
-            body = {
-                "countryCodeISO3": country,
-                "triggersPerLeadTime": triggers_per_lead_time,
-                "disasterType": disasterType,
-                "eventName": event_name,
-                "date": upload_time,
-            }
-            self.ibf_api_post_request("event/triggers-per-leadtime", body=body)
-
         # END OF EVENT LOOP
         ###############################################################################################################
 
