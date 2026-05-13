@@ -579,193 +579,166 @@ class Load:
                 continue
 
             events = dict(sorted(trigger_events.items()))
-            
 
-            for lead_time_event, event_type in events.items():
+            lead_time_event = min(events.keys())
+            event_type = events[lead_time_event]
 
-                # set as alert if lead time is greater than trigger_on_lead_time
-                if lead_time_event > trigger_on_lead_time and event_type == "trigger":
-                    event_type = "alert"
+            # set as alert if lead time is greater than trigger_on_lead_time
+            if lead_time_event > trigger_on_lead_time and event_type == "trigger":
+                event_type = "alert"
 
-                # currently this flash flood is only enabled in one admin-area
-                # manually set event name as hardcoded admin-area name to follow existing flash flood logic
-                event_name = "Dire Dawa urban"
+            # currently this flash flood is only enabled in one admin-area
+            # manually set event name as hardcoded admin-area name to follow existing flash flood logic
+            event_name = "Dire Dawa urban"
 
-                if event_name == "" or event_name == "None" or event_name == "Na":
-                    event_name = str(station_code)
+            if event_name == "" or event_name == "None" or event_name == "Na":
+                event_name = str(station_code)
 
-                logging.info(
-                    f"event {event_name}, type '{event_type}', lead time {lead_time_event}"
-                )
-                forecast_station = forecast_station_data.get_data_unit(
+            logging.info(
+                f"event {event_name}, type '{event_type}', lead time {lead_time_event}"
+            )
+            forecast_station = forecast_station_data.get_data_unit(
+                station_code, lead_time_event
+            )
+            threshold_station = threshold_station_data.get_data_unit(station_code)
+
+            # send exposure data: admin-area-dynamic-data/exposure
+            indicators = [
+                "population_affected",
+                #"population_affected_percentage",
+                #"alert_threshold",
+                "forecast_trigger",
+                "forecast_severity",
+            ]
+
+            for indicator in indicators:
+                for adm_level in adm_levels: #forecast_station.pcodes.keys(): uploading data only for admin level 3 
+                    exposure_pcodes = []
+                    logging.info(f"Sending data to IBF API for country {country} indicator {indicator} admin level {forecast_station.pcodes}")
+                    for pcode in forecast_station.pcodes:
+                    #for pcode in forecast_station.pcodes[f'{adm_level}']:                        
+                        forecast_admin = forecast_data.get_data_unit(
+                            pcode, lead_time_event
+                        )
+                        amount = None
+                        if indicator == "population_affected":
+                            amount = forecast_admin.pop_affected
+                        elif indicator == "population_affected_percentage":
+                            amount = forecast_admin.pop_affected_perc
+                        elif indicator == "forecast_severity":
+                            amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                        elif indicator == "forecast_trigger":
+                            amount = forecast_trigger_status(
+                                triggered=(True if event_type == "trigger" else False),
+                                #triggered= (forecast_admin.triggered > 0),# True if event_type == "trigger" else False   ),
+                                trigger_class=pipeline_will_trigger_portal,
+                                )
+                        #elif indicator == "alert_threshold":
+                        #    amount = alert_class_to_threshold(alert_class=forecast_admin.alert_class, triggered=(True if event_type == "trigger" else False),)
+                        exposure_pcodes.append(
+                            {"placeCode": pcode, "amount": amount}
+                        )
+                        processed_pcodes.append(pcode)
+                    body = {
+                        "countryCodeISO3": country,
+                        "leadTime": f"{lead_time_event}-hour",
+                        "dynamicIndicator": indicator,
+                        "adminLevel": int(adm_level),
+                        "exposurePlaceCodes": exposure_pcodes,
+                        "disasterType": disasterType,
+                        "eventName": event_name,
+                        "date": upload_time,
+                    }
+                    logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour admin level {adm_level} event name {event_name}")
+
+                    statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
+
+                    statsPath=statsPath.replace("extent", f"{indicator}")
+
+                    with open(statsPath, 'w') as fp:
+                        json.dump(body, fp)
+
+
+                    self.ibf_api_post_request(
+                        "admin-area-dynamic-data/exposure", body=body
+                    )
+            processed_pcodes = list(set(processed_pcodes))
+
+            # GloFAS station data: point-data/dynamic
+            # 1 call per alert/triggered station, and 1 overall (to same endpoint) for all other stations
+            if event_type != "none":
+                station_forecasts = {
+                    "forecastLevel": [],
+                    "eapAlertClass": [],
+                    "forecastReturnPeriod": [],
+                    "triggerLevel": [],
+                    "water-level": [],
+                    "water-level-reference": [],
+                    "water-level-previous": [],
+                    "water-level-alert-level":[],
+                }
+
+                discharge_station = discharge_station_data.get_data_unit(
                     station_code, lead_time_event
                 )
-                threshold_station = threshold_station_data.get_data_unit(station_code)
-
-                # send exposure data: admin-area-dynamic-data/exposure
-                indicators = [
-                    "population_affected",
-                    #"population_affected_percentage",
-                    #"alert_threshold",
-                    "forecast_trigger",
-                    "forecast_severity",
-                ]
-
-                for indicator in indicators:
-                    for adm_level in adm_levels: #forecast_station.pcodes.keys(): uploading data only for admin level 3 
-                        exposure_pcodes = []
-                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator} admin level {forecast_station.pcodes}")
-                        for pcode in forecast_station.pcodes:
-                        #for pcode in forecast_station.pcodes[f'{adm_level}']:                        
-                            forecast_admin = forecast_data.get_data_unit(
-                                pcode, lead_time_event
+                for indicator in station_forecasts.keys():
+                    value = None
+                    if indicator == "forecastLevel":
+                        value = int(discharge_station.discharge_mean or 0)
+                    elif indicator == "eapAlertClass":
+                        value = forecast_station.alert_class
+                        if event_type == "alert" and value == "max":
+                            value = "med"
+                    elif indicator == "forecastReturnPeriod":
+                        value = forecast_station.return_period
+                    elif indicator == "triggerLevel":
+                        value = int(
+                            threshold_station.get_threshold(
+                                trigger_on_return_period
                             )
-                            amount = None
-                            if indicator == "population_affected":
-                                amount = forecast_admin.pop_affected
-                            elif indicator == "population_affected_percentage":
-                                amount = forecast_admin.pop_affected_perc
-                            elif indicator == "forecast_severity":
-                                amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
-                            elif indicator == "forecast_trigger":
-                                amount = forecast_trigger_status(
-                                    triggered=(True if event_type == "trigger" else False),
-                                    #triggered= (forecast_admin.triggered > 0),# True if event_type == "trigger" else False   ),
-                                    trigger_class=pipeline_will_trigger_portal,
-                                    )
-                            #elif indicator == "alert_threshold":
-                            #    amount = alert_class_to_threshold(alert_class=forecast_admin.alert_class, triggered=(True if event_type == "trigger" else False),)
-                            exposure_pcodes.append(
-                                {"placeCode": pcode, "amount": amount}
-                            )
-                            processed_pcodes.append(pcode)
-                        body = {
-                            "countryCodeISO3": country,
-                            "leadTime": f"{lead_time_event}-hour",
-                            "dynamicIndicator": indicator,
-                            "adminLevel": int(adm_level),
-                            "exposurePlaceCodes": exposure_pcodes,
-                            "disasterType": disasterType,
-                            "eventName": event_name,
-                            "date": upload_time,
-                        }
-                        logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour admin level {adm_level} event name {event_name}")
-
-                        statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
-
-                        statsPath=statsPath.replace("extent", f"{indicator}")
-
-                        with open(statsPath, 'w') as fp:
-                            json.dump(body, fp)
-
-
-                        self.ibf_api_post_request(
-                            "admin-area-dynamic-data/exposure", body=body
                         )
-                processed_pcodes = list(set(processed_pcodes))
-
-                # GloFAS station data: point-data/dynamic
-                # 1 call per alert/triggered station, and 1 overall (to same endpoint) for all other stations
-                if event_type != "none":
-                    station_forecasts = {
-                        "forecastLevel": [],
-                        "eapAlertClass": [],
-                        "forecastReturnPeriod": [],
-                        "triggerLevel": [],
-                        "water-level": [],
-                        "water-level-reference": [],
-                        "water-level-previous": [],
-                        "water-level-alert-level":[],
-                    }
-
-                    discharge_station = discharge_station_data.get_data_unit(
-                        station_code, lead_time_event
-                    )
-                    for indicator in station_forecasts.keys():
-                        value = None
-                        if indicator == "forecastLevel":
-                            value = int(discharge_station.discharge_mean or 0)
-                        elif indicator == "eapAlertClass":
-                            value = forecast_station.alert_class
-                            if event_type == "alert" and value == "max":
-                                value = "med"
-                        elif indicator == "forecastReturnPeriod":
-                            value = forecast_station.return_period
-                        elif indicator == "triggerLevel":
-                            value = int(
-                                threshold_station.get_threshold(
-                                    trigger_on_return_period
-                                )
+                    elif indicator == "water-level-reference":
+                        value = int(
+                            threshold_station.get_threshold(
+                                trigger_on_return_period
                             )
-                        elif indicator == "water-level-reference":
-                            value = int(
-                                threshold_station.get_threshold(
-                                    trigger_on_return_period
-                                )
-                            )
-                        elif indicator == "water-level-previous":
-                            value = 0
-                        elif indicator == "water-level":
-                            value = int(discharge_station.discharge_mean or 0)
-                        elif indicator == "water-level-alert-level":
-                            value = forecast_station.alert_class
-                            if event_type == "alert" and value == "max":
-                                value = "trigger"
-                            elif event_type == "alert" and value =="med":
-                                value = "warning-medium"
-                            elif event_type == "alert" and value == "min":
-                                value = "warning-low"
-                            else:
-                                value = "none"
+                        )
+                    elif indicator == "water-level-previous":
+                        value = 0
+                    elif indicator == "water-level":
+                        value = int(discharge_station.discharge_mean or 0)
+                    elif indicator == "water-level-alert-level":
+                        value = forecast_station.alert_class
+                        if event_type == "alert" and value == "max":
+                            value = "trigger"
+                        elif event_type == "alert" and value =="med":
+                            value = "warning-medium"
+                        elif event_type == "alert" and value == "min":
+                            value = "warning-low"
+                        else:
+                            value = "none"
 
 
-                        station_data = {"fid": station_code[-1], "value": value}
-                        station_forecasts[indicator].append(station_data)
-                        body = {
-                            "countryCodeISO3": country,
-                            "leadTime": f"{lead_time_event}-hour",
-                            "key": indicator,
-                            "dynamicPointData": station_forecasts[indicator],
-                            "pointDataCategory": "gauges",
-                            "disasterType": disasterType,
-                            "date": upload_time,
-                        }
-                        self.ibf_api_post_request("point-data/dynamic", body=body)
-
-                        statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
-                        statsPath=statsPath.replace("extent", f"{indicator}")
-
-                        with open(statsPath, 'w') as fp:
-                            json.dump(body, fp)
-
-                    processed_stations.append(station_code)
-
-            # send trigger per lead time: event/triggers-per-leadtime
-            triggers_per_lead_time = []
-            for lead_time in [1,2,3,6]:# range(0, 8):
-                is_trigger, is_trigger_or_alert = False, False
-                for lead_time_event, event_type in events.items():
-                    if event_type == "trigger" and lead_time >= lead_time_event:
-                        is_trigger = True
-                    if (
-                        event_type == "trigger" or event_type == "alert"
-                    ) and lead_time >= lead_time_event:
-                        is_trigger_or_alert = True
-                triggers_per_lead_time.append(
-                    {
-                        "leadTime": f"{lead_time}-day",
-                        "triggered": is_trigger_or_alert,
-                        "thresholdReached": is_trigger,
+                    station_data = {"fid": station_code[-1], "value": value}
+                    station_forecasts[indicator].append(station_data)
+                    body = {
+                        "countryCodeISO3": country,
+                        "leadTime": f"{lead_time_event}-hour",
+                        "key": indicator,
+                        "dynamicPointData": station_forecasts[indicator],
+                        "pointDataCategory": "gauges",
+                        "disasterType": disasterType,
+                        "date": upload_time,
                     }
-                )
-            body = {
-                "countryCodeISO3": country,
-                "triggersPerLeadTime": triggers_per_lead_time,
-                "disasterType": disasterType,
-                "eventName": event_name,
-                "date": upload_time,
-            }
-            self.ibf_api_post_request("event/triggers-per-leadtime", body=body)
+                    self.ibf_api_post_request("point-data/dynamic", body=body)
+
+                    statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
+                    statsPath=statsPath.replace("extent", f"{indicator}")
+
+                    with open(statsPath, 'w') as fp:
+                        json.dump(body, fp)
+
+                processed_stations.append(station_code)
 
         # END OF EVENT LOOP
         ###############################################################################################################
