@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  ibfflood:
+    build:
+      context: .
+    image: ibf-flashflood-pipeline
+    container_name: ibf_flash_flood_pipeline
+    env_file:
+      - .env
+    command: python flood_pipeline.py --country ETH --prepare --extract --forecast --send

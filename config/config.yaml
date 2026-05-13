@@ -1,0 +1,39 @@
+# configuration file for ibf flood pipeline
+
+floods:
+  global_flood_maps_url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard
+  minimum_flood_depth: 0.1  # minimum flood depth in meters, to calculate affected population 
+  disaster_type: flash-floods
+  flood_var_name: H  # in wflow model flood depth has variable name z Change this if your variable name is different
+  discharge_multiplier: 10000  # Set multiplier for discharge values, to simulate triggering of flood alerts for Demo 
+
+auxiliary:
+  #worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
+  worldpop_url: https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/
+
+
+databases:
+  blob_container: ibfdatapipelines
+  blob_storage_path: flash-flood
+  postgresql_server: 510-postgresql-flex-server.postgres.database.azure.com
+  postgresql_port: 5432
+  postgresql_database: global510
+
+countries:
+  - name: ETH
+    admin-levels:
+      - 3
+    pipeline-will-trigger-portal: enable
+    classify-alert-on: disable
+    trigger-on-lead-time: 3
+    trigger-on-return-period: 5
+    trigger-on-minimum-probability: 0.6
+    classify-alert-on: return-period
+    alert-on-return-period:
+      min: 2
+      med: 5
+      max: 10
+    alert-on-minimum-probability: 0.6
+
+  
+
