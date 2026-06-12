@@ -18,7 +18,6 @@ import logging
 import glob 
 import numpy as np
 import xarray as xr
-from rasterio.transform import from_origin
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 import hydromt_sfincs
 
@@ -432,27 +431,15 @@ class Extract:
 
             data = np.nan_to_num(flood_masked.values, nan=0.0)
 
-            # Use x and y coordinates
-            x = ds['x'].values
-            y = ds['y'].values
-
-            # Ensure y is in descending order (top-to-bottom)
-            if y[0] < y[-1]:
-                y = y[::-1]
-                data = data[::-1, :]
-
-            # Calculate resolution
-            res_x = (x[-1] - x[0]) / (len(x) - 1)
-            res_y = (y[0] - y[-1]) / (len(y) - 1)
-
-            # Define transform and CRS
-            src_transform = from_origin(x[0], y[0], res_x, res_y)
-            src_crs = 'EPSG:32637'
+            # Use georeferencing from the downscaled raster itself so bounds and shape stay consistent.
+            src_transform = flood_masked.rio.transform(recalc=True)
+            src_crs = flood_masked.rio.crs or 'EPSG:32637'
             dst_crs = 'EPSG:4326'
 
             # Prepare destination transform and shape
+            src_bounds = rasterio.transform.array_bounds(data.shape[0], data.shape[1], src_transform)
             dst_transform, width, height = calculate_default_transform(
-                src_crs, dst_crs, data.shape[1], data.shape[0], *rasterio.transform.array_bounds(data.shape[0], data.shape[1], src_transform)
+                src_crs, dst_crs, data.shape[1], data.shape[0], *src_bounds
             )
 
             # Prepare output array
