@@ -274,32 +274,17 @@ class Forecast:
 
     def __compute_flood_extent(self):
         """Compute flood extent raster"""
-        # get country-wide flood extent rasters
-        country = self.data.forecast_admin.country
-        flood_rasters = {}
-        output_dir = self.input_data_path+'/hydrology'
+        adm_lvl = self.data.forecast_admin.adm_levels[-1]
 
-        # Loop through return periods and copy the file 
-        # Here we are going to use a floodextent map developed for the actual event but keepinng the retun period logic 
-        # please replace this as it might not be needed
-        for rp in [5, 10, 20, 50, 75, 100, 200, 500]:
-            output_filename = f"flood_map_{country.upper()}_RP{rp}.tif"
-            output_path = os.path.join(output_dir, output_filename)
-            shutil.copyfile(self.flood_extent_raster, output_path)
-
-            flood_rasters[rp] = output_path
-
-        # create empty raster
+        # create empty raster from the flood extent produced by prepare_wflow_data
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
-        with rasterio.open(list(flood_rasters.values())[0]) as src:
+        with rasterio.open(self.flood_extent_raster) as src:
             flood_raster_data = src.read()
             flood_raster_data = np.empty(flood_raster_data.shape)
             flood_raster_meta = src.meta.copy()
             flood_raster_meta["compress"] = "lzw"
             with rasterio.open(empty_raster, "w", **flood_raster_meta) as dest:
                 dest.write(flood_raster_data)
-
-        adm_lvl = self.data.forecast_admin.adm_levels[-1]
 
         # get adm boundaries
         gdf_adm = self.load.get_adm_boundaries(
@@ -317,15 +302,10 @@ class Forecast:
             ):
                 if forecast_data_unit.triggered:
                     adm_bounds = gdf_adm.loc[forecast_data_unit.pcode, "geometry"]
-                    rp = forecast_data_unit.return_period
 
-                    # if return period is not available, use the smallest available
-                    if rp not in flood_rasters.keys():
-                        rp = min(flood_rasters.keys())
-
-                    # clip flood extent raster with admin division boundaries
+                    # clip the flood extent raster with admin division boundaries
                     flood_raster_data, flood_raster_meta = clip_raster(
-                        flood_rasters[rp], [adm_bounds]
+                        self.flood_extent_raster, [adm_bounds]
                     )
                     # save the clipped raster
                     flood_raster_admin_div = (
