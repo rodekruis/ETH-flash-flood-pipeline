@@ -133,9 +133,6 @@ class Extract:
         logging.info(f"start preparing rainfall data for country {country}")
 
         country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)    
-        target_datetime=datetime.today() 
-        # if debug:
-        #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
         local_file_path = self.inputPathGrid +"/meteorology"
 
         if not os.path.exists(local_file_path):
@@ -184,9 +181,6 @@ class Extract:
         logging.info(f"start extract rainfall data for country {country}")
 
         country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)
-        target_datetime = datetime.today()
-        # if debug:
-        #     target_datetime = (datetime.today() - timedelta(days=1))
         local_file_path = self.inputPathGrid + "/meteorology"
 
         # Load and sort TIF files
@@ -265,11 +259,6 @@ class Extract:
                 country = self.country
             logging.info(f"start extract rainfall data for country {country}")
 
-            target_datetime = datetime.today()
-
-            # if debug:
-            #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
-
             local_file_path = self.inputPathGrid + "/meteorology"
 
             # Load and sort TIF files
@@ -344,12 +333,7 @@ class Extract:
         """
         if country is None:
             country = self.country
-        logging.info(f"start preparing rainfall data for country {country}")
-
-        target_datetime = datetime.today()#.strftime("%Y%m%d")
-
-        # if debug:
-        #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
+        logging.info(f"start preparing rainfall data for country {country}")     
 
         flood_depth_addition = 0.0
 
@@ -478,17 +462,13 @@ class Extract:
                 resampling=Resampling.nearest
             )
 
-            # Optionally add a constant offset to output flood extent raster pixels.
-            if raster_pixel_addition != 0.0:
-                dst_data = dst_data + raster_pixel_addition
-
-            # Ensure mock flood-depth addition also affects pixels that remained zero.
-            if flood_depth_addition != 0.0:
-                dst_data = np.where(
-                    np.isclose(dst_data, 0.0),
-                    dst_data + flood_depth_addition,
-                    dst_data,
-                )
+            # # Ensure mock flood-depth addition also affects pixels that remained zero.
+            # if flood_depth_addition != 0.0:
+            #     dst_data = np.where(
+            #         np.isclose(dst_data, 0.0),
+            #         dst_data + flood_depth_addition,
+            #         dst_data,
+            #     )
 
             # Save to GeoTIFF
             output_tif = self.outputPathGrid + '/flood_extent.tif'
@@ -521,11 +501,9 @@ class Extract:
 
         logging.info(f"start extracting wflow data for country {country}")   
 
-        target_datetime = datetime.today()
         flow_multiplier = 1.0
 
         if debug:
-            # target_datetime = (datetime.today() - timedelta(days=1))
             flow_multiplier = float(
                 self._get_optional_setting("mock_discharge_multiplier", 1.0)
             )
