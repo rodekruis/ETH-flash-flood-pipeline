@@ -6,9 +6,9 @@ floods:
   disaster_type: flash-floods
   flood_var_name: H  # in wflow model flood depth has variable name z Change this if your variable name is different
   discharge_multiplier: 10000  # Set multiplier for discharge values, to simulate triggering of flood alerts for Demo 
-  mock_discharge_multiplier: 100  # Multiplies wflow discharge values during extraction.
+  mock_discharge_multiplier: 0  # Multiplies wflow discharge values during extraction.
   mock_flood_depth_addition: 0  # Adds 5 units to NetCDF flood depth variable before downscaling.
-  mock_raster_pixel_addition: 10  # Adds a constant offset to output flood_extent.tif pixels.
+  mock_raster_pixel_addition: 0  # Adds a constant offset to output flood_extent.tif pixels.
 
 auxiliary:
   #worldpop_url: https://data.worldpop.org/GIS/Population/Global_2021_2022_1km_UNadj/constrained/2022
@@ -26,12 +26,11 @@ countries:
   - name: ETH
     admin-levels:
       - 3
-    pipeline-will-trigger-portal: enable
+    pipeline-will-trigger-portal: disable # enable / disable
     classify-alert-on: disable
     trigger-on-lead-time: 3
     trigger-on-return-period: 5
     trigger-on-minimum-probability: 0.6
-    classify-alert-on: return-period
     alert-on-return-period:
       min: 2
       med: 5

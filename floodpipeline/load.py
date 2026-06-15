@@ -147,7 +147,7 @@ def forecast_trigger_status(triggered: bool, trigger_class: str):
     """determine if forecast is a trigger for IBF portal if trigger status is true and trigger activation is enabled in config file the 
         trigger staus will be 1 , else 0"""
     if triggered:
-        if trigger_class == "enabled":
+        if trigger_class == "enable":
             return 1
         else:
             return 0
@@ -626,7 +626,7 @@ class Load:
                         elif indicator == "population_affected_percentage":
                             amount = forecast_admin.pop_affected_perc
                         elif indicator == "forecast_severity":
-                            amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                            amount = (1 if event_type == "trigger" or event_type == "alert" else 0)
                         elif indicator == "forecast_trigger":
                             amount = forecast_trigger_status(
                                 triggered=(True if event_type == "trigger" else False),
@@ -709,9 +709,15 @@ class Load:
                         value = int(discharge_station.discharge_mean or 0)
                     elif indicator == "water-level-alert-level":
                         value = forecast_station.alert_class
-                        if event_type == "alert" and value == "max":
+                        if event_type == "trigger" and value == "max":
                             value = "trigger"
-                        elif event_type == "alert" and value =="med":
+                        elif event_type == "trigger" and value == "med":
+                            value = "trigger"
+                        elif event_type == "trigger" and value == "min":
+                            value = "trigger"
+                        elif event_type == "alert" and value == "max":
+                            value = "warning-medium"
+                        elif event_type == "alert" and value == "med":
                             value = "warning-medium"
                         elif event_type == "alert" and value == "min":
                             value = "warning-low"
