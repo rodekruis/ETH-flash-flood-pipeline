@@ -478,17 +478,13 @@ class Extract:
                 resampling=Resampling.nearest
             )
 
-            # Optionally add a constant offset to output flood extent raster pixels.
-            if raster_pixel_addition != 0.0:
-                dst_data = dst_data + raster_pixel_addition
-
-            # Ensure mock flood-depth addition also affects pixels that remained zero.
-            if flood_depth_addition != 0.0:
-                dst_data = np.where(
-                    np.isclose(dst_data, 0.0),
-                    dst_data + flood_depth_addition,
-                    dst_data,
-                )
+            # # Ensure mock flood-depth addition also affects pixels that remained zero.
+            # if flood_depth_addition != 0.0:
+            #     dst_data = np.where(
+            #         np.isclose(dst_data, 0.0),
+            #         dst_data + flood_depth_addition,
+            #         dst_data,
+            #     )
 
             # Save to GeoTIFF
             output_tif = self.outputPathGrid + '/flood_extent.tif'
