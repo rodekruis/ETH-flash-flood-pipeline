@@ -494,18 +494,18 @@ class Extract:
             # Save to GeoTIFF
             output_tif = self.outputPathGrid + '/flood_extent.tif'
 
-            # with rasterio.open(
-            #     output_tif,
-            #     'w',
-            #     driver='GTiff',
-            #     height=height,
-            #     width=width,
-            #     count=1,
-            #     dtype=dst_data.dtype,
-            #     crs=dst_crs,
-            #     transform=dst_transform
-            # ) as dst:
-            #     dst.write(dst_data, 1)
+            with rasterio.open(
+                output_tif,
+                'w',
+                driver='GTiff',
+                height=height,
+                width=width,
+                count=1,
+                dtype=dst_data.dtype,
+                crs=dst_crs,
+                transform=dst_transform
+            ) as dst:
+                dst.write(dst_data, 1)
 
         except FileNotFoundError:
             logging.warning(
