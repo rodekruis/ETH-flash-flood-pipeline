@@ -134,8 +134,8 @@ class Extract:
 
         country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)    
         target_datetime=datetime.today() 
-        if debug:
-            target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
+        # if debug:
+        #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
         local_file_path = self.inputPathGrid +"/meteorology"
 
         if not os.path.exists(local_file_path):
@@ -185,8 +185,8 @@ class Extract:
 
         country_gdf = self.load.get_adm_boundaries(country=country, adm_level=1)
         target_datetime = datetime.today()
-        if debug:
-            target_datetime = (datetime.today() - timedelta(days=1))
+        # if debug:
+        #     target_datetime = (datetime.today() - timedelta(days=1))
         local_file_path = self.inputPathGrid + "/meteorology"
 
         # Load and sort TIF files
@@ -267,8 +267,8 @@ class Extract:
 
             target_datetime = datetime.today()
 
-            if debug:
-                target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
+            # if debug:
+            #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
 
             local_file_path = self.inputPathGrid + "/meteorology"
 
@@ -348,21 +348,20 @@ class Extract:
 
         target_datetime = datetime.today()#.strftime("%Y%m%d")
 
+        # if debug:
+        #     target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
+
+        flood_depth_addition = 0.0
+
         if debug:
-            target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
+            flood_depth_addition = float(
+                self._get_optional_setting("mock_flood_depth_addition", 0.0)
+            )
 
-        flood_depth_addition = float(
-            self._get_optional_setting("mock_flood_depth_addition", 0.0)
-        )
-        raster_pixel_addition = float(
-            self._get_optional_setting("mock_raster_pixel_addition", 0.0)
-        )
-
-        if flood_depth_addition != 0.0 or raster_pixel_addition != 0.0:
+        if flood_depth_addition != 0.0:
             logging.info(
                 "Mock mode active for flood extent: "
-                f"mock_flood_depth_addition={flood_depth_addition}, "
-                f"mock_raster_pixel_addition={raster_pixel_addition}"
+                f"mock_flood_depth_addition={flood_depth_addition}"
             )
 
         local_file_path = self.inputPathGrid +"/hydrology"
@@ -523,17 +522,13 @@ class Extract:
         logging.info(f"start extracting wflow data for country {country}")   
 
         target_datetime = datetime.today()
-        flow_multiplier = float(
-            self._get_optional_setting("mock_discharge_multiplier", 1.0)
-        )
+        flow_multiplier = 1.0
 
         if debug:
-            target_datetime = (datetime.today() - timedelta(days=1))
-            # Keep backward compatibility for existing debug configuration.
-            if flow_multiplier == 1.0:
-                flow_multiplier = float(
-                    self._get_optional_setting("discharge_multiplier", 1.0)
-                )
+            # target_datetime = (datetime.today() - timedelta(days=1))
+            flow_multiplier = float(
+                self._get_optional_setting("mock_discharge_multiplier", 1.0)
+            )
 
         if flow_multiplier != 1.0:
             logging.info(
