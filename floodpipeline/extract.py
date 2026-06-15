@@ -63,6 +63,15 @@ class Extract:
             self.load.set_secrets(secrets)
         self.data = data
 
+    def _get_optional_setting(self, setting: str, default):
+        """Return a setting value when available, otherwise a default."""
+        if self.settings is None:
+            return default
+        try:
+            return self.settings.get_setting(setting)
+        except ValueError:
+            return default
+
     def set_settings(self, settings):
         """Set settings"""
         if not isinstance(settings, Settings):
@@ -342,6 +351,20 @@ class Extract:
         if debug:
             target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
 
+        flood_depth_addition = float(
+            self._get_optional_setting("mock_flood_depth_addition", 0.0)
+        )
+        raster_pixel_addition = float(
+            self._get_optional_setting("mock_raster_pixel_addition", 0.0)
+        )
+
+        if flood_depth_addition != 0.0 or raster_pixel_addition != 0.0:
+            logging.info(
+                "Mock mode active for flood extent: "
+                f"mock_flood_depth_addition={flood_depth_addition}, "
+                f"mock_raster_pixel_addition={raster_pixel_addition}"
+            )
+
         local_file_path = self.inputPathGrid +"/hydrology"
         subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
 
@@ -376,7 +399,7 @@ class Extract:
             if flood_var_name not in ds:
                 raise KeyError(f"Variable '{flood_var_name}' not found in the dataset.")
 
-            flood = ds_squeezed[flood_var_name]
+            flood = ds_squeezed[flood_var_name] + flood_depth_addition
 
             # Compute max flood depth lazily (parallelized)
             flood_max = flood.max(dim="time")
@@ -456,21 +479,33 @@ class Extract:
                 resampling=Resampling.nearest
             )
 
+            # Optionally add a constant offset to output flood extent raster pixels.
+            if raster_pixel_addition != 0.0:
+                dst_data = dst_data + raster_pixel_addition
+
+            # Ensure mock flood-depth addition also affects pixels that remained zero.
+            if flood_depth_addition != 0.0:
+                dst_data = np.where(
+                    np.isclose(dst_data, 0.0),
+                    dst_data + flood_depth_addition,
+                    dst_data,
+                )
+
             # Save to GeoTIFF
             output_tif = self.outputPathGrid + '/flood_extent.tif'
 
-            with rasterio.open(
-                output_tif,
-                'w',
-                driver='GTiff',
-                height=height,
-                width=width,
-                count=1,
-                dtype=dst_data.dtype,
-                crs=dst_crs,
-                transform=dst_transform
-            ) as dst:
-                dst.write(dst_data, 1)
+            # with rasterio.open(
+            #     output_tif,
+            #     'w',
+            #     driver='GTiff',
+            #     height=height,
+            #     width=width,
+            #     count=1,
+            #     dtype=dst_data.dtype,
+            #     crs=dst_crs,
+            #     transform=dst_transform
+            # ) as dst:
+            #     dst.write(dst_data, 1)
 
         except FileNotFoundError:
             logging.warning(
@@ -488,11 +523,22 @@ class Extract:
         logging.info(f"start extracting wflow data for country {country}")   
 
         target_datetime = datetime.today()
-        flow_multiplier = 1 # Set multiplier for flow values, to simulate triggering of flood alerts
+        flow_multiplier = float(
+            self._get_optional_setting("mock_discharge_multiplier", 1.0)
+        )
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))
-            flow_multiplier = self.settings.get_setting("discharge_multiplier")
+            # Keep backward compatibility for existing debug configuration.
+            if flow_multiplier == 1.0:
+                flow_multiplier = float(
+                    self._get_optional_setting("discharge_multiplier", 1.0)
+                )
+
+        if flow_multiplier != 1.0:
+            logging.info(
+                f"Mock mode active for discharge: mock_discharge_multiplier={flow_multiplier}"
+            )
 
         local_file_path = self.inputPathGrid + "/hydrology"
 
