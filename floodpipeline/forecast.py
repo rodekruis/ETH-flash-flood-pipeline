@@ -280,26 +280,22 @@ class Forecast:
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
         with rasterio.open(self.flood_extent_raster) as src:
             flood_raster_data = src.read()
-            flood_raster_data = np.empty(flood_raster_data.shape)
+            flood_raster_data = np.zeros(flood_raster_data.shape, dtype=flood_raster_data.dtype)
             flood_raster_meta = src.meta.copy()
             flood_raster_meta["compress"] = "lzw"
             with rasterio.open(empty_raster, "w", **flood_raster_meta) as dest:
                 dest.write(flood_raster_data)
 
         # get adm boundaries
-        gdf_adm = self.load.get_adm_boundaries(
-            self.data.forecast_admin.country, adm_lvl
-        )
+        gdf_adm = self.load.get_adm_boundaries(self.data.forecast_admin.country, adm_lvl )
         gdf_adm.index = gdf_adm[f"adm{adm_lvl}_pcode"]
+
         for lead_time in self.data.forecast_admin.get_lead_times():
-            raster_lead_time = self.flood_extent_raster.replace(
-                ".tif", f"_{lead_time}.tif"
-            )
+            raster_lead_time = self.flood_extent_raster.replace(".tif", f"_{lead_time}.tif" )
+
             # calculate flood extent for each triggered admin division
             flood_rasters_admin_div = []
-            for forecast_data_unit in self.data.forecast_admin.get_data_units(
-                lead_time=lead_time, adm_level=adm_lvl
-            ):
+            for forecast_data_unit in self.data.forecast_admin.get_data_units( lead_time=lead_time, adm_level=adm_lvl):
                 if forecast_data_unit.triggered:
                     adm_bounds = gdf_adm.loc[forecast_data_unit.pcode, "geometry"]
 
@@ -319,19 +315,21 @@ class Forecast:
 
             # merge flood extents of each triggered admin division
             if len(flood_rasters_admin_div) > 0:
-                flood_rasters_admin_div.append(empty_raster)
+                #flood_rasters_admin_div.append(empty_raster) # un comment this if you want to keep the empty raster in the merged raster, but it will make the merged raster bigger than it should be
                 flood_raster_data, flood_raster_meta = merge_rasters(
                     flood_rasters_admin_div
                 )
                 flood_raster_meta["compress"] = "lzw"
                 with rasterio.open(raster_lead_time, "w", **flood_raster_meta) as dest:
                     dest.write(flood_raster_data)
+                '''    
                 for file in flood_rasters_admin_div:
                     if file != empty_raster:
                         try:
                             os.remove(file)
                         except FileNotFoundError:
                             pass
+                '''
             else:
                 shutil.copy(empty_raster, raster_lead_time)
 

@@ -549,7 +549,7 @@ class Load:
 
             # determine events
             events = {}
-            for lead_time in [1,2,3,6]:
+            for lead_time in [1,2,3]:# uploading daa only for the first 3 hrs lead_time in forecast_station_data.get_lead_times(station_code):
                 if (
                     forecast_station_data.get_data_unit(
                         station_code, lead_time
@@ -559,7 +559,7 @@ class Load:
                     events[lead_time] = "alert"
 
 
-            for lead_time in [1,2,3,6]:
+            for lead_time in [1,2,3]:
                 if forecast_station_data.get_data_unit(
                     station_code, lead_time
                 ).triggered:
@@ -730,7 +730,8 @@ class Load:
                         "disasterType": disasterType,
                         "date": upload_time,
                     }
-                    self.ibf_api_post_request("point-data/dynamic", body=body)
+                    #self.ibf_api_post_request("point-data/dynamic", body=body) # commented out to avoid sending station data for each event, instead we send all other stations at the end of the function
+                    logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour station {station_code}")
 
                     statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
                     statsPath=statsPath.replace("extent", f"{indicator}")
@@ -1096,6 +1097,7 @@ class Load:
                                 lat=record["lat"],
                                 lon=record["lon"],
                                 pcodes=record["pcodes"],
+                                lead_time=record["lead_time"],
                                 thresholds=record["thresholds"],
                             )
                         else:

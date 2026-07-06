@@ -20,6 +20,7 @@ import numpy as np
 import xarray as xr
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 import hydromt_sfincs
+import rioxarray
 
 
 supported_sources = ["DELTARES"]
@@ -337,19 +338,18 @@ class Extract:
             country = self.country
         logging.info(f"start preparing rainfall data for country {country}")
 
-        target_datetime = datetime.today()#.strftime("%Y%m%d")
-
-        if debug:
-            target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")       
-
+        target_datetime = datetime.today()#.strftime("%Y%m%d") 
+       
+        #download the flood extent data from the DELTARES FTP server
         local_file_path = self.inputPathGrid +"/hydrology"
-        subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
+        subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif" 
+        geo_admin = self.load.get_adm_boundaries(country=country, adm_level=1)   
+
 
         if not os.path.exists(local_file_path):
             os.makedirs(local_file_path)
 
         base_dir= "Hydrology" 
-
         try:
             self.load.download_forecast_file(
                 base_dir,
@@ -360,117 +360,144 @@ class Extract:
             depth_threshold =self.settings.get_setting("minimum_flood_depth")
             flood_var_name = self.settings.get_setting("flood_var_name") # Change this if your variable name is different
 
-            # Find the first NetCDF file with "flood" in the filename
-            matches = glob.glob(os.path.join(local_file_path, '*floodmap*.nc'))
-            if not matches:
-                raise FileNotFoundError("No NetCDF file with 'floodmap' in the name found.")
-                
-            nc_file = matches[0]
-            logging.info(f"Found file: {nc_file}")
+            ###
+            if debug:
+                #target_datetime = datetime.strptime("2025-06-04", "%Y-%m-%d")
+                mock_flood_extent_path = self.inputPathGrid + "/other/100yr_return_period_flood_5m.tif"  
+                mock_output_tif = self.outputPathGrid + '/flood_extent.tif' 
+                with rasterio.open(mock_flood_extent_path) as src:
+                    flood_raster_data = src.read()
+                    flood_raster_meta = src.meta.copy()
+                    flood_raster_meta["crs"] = "EPSG:4326"
+                    flood_raster_meta["compress"] = "lzw"
+                    with rasterio.open(mock_output_tif, "w", **flood_raster_meta) as dest:
+                        dest.write(flood_raster_data)
+            else:
+                # Find file with better error handling
+                nc_files = glob.glob(os.path.join(local_file_path, '*floodmap*.nc'))
+                if not nc_files:
+                    raise FileNotFoundError("No NetCDF file with 'floodmap' in the name found.")
 
-            # Open the NetCDF file
-            ds = xr.open_dataset(nc_file)
-            ds_squeezed = ds.squeeze(dim="realization", drop=True)
+                # Open with automatic variable checking
+                try:
+                    ds = xr.open_dataset(nc_files[0], drop_variables=['realization'])
+                    flood_max = (
+                        ds[flood_var_name]
+                        .max(dim="time")
+                        .rio.write_crs("EPSG:4326") #4326 is WGS 84, which is a common geographic coordinate system.
+                        .where(lambda x: x >= depth_threshold) # this might not be needed as the flood maps are not yet flood depth but reported as flood height above sea level 
+                        .compute()
+                    )
+                except KeyError as e:
+                    raise KeyError(f"Variable '{flood_var_name}' not found in dataset.") from e
 
-            # Ensure the flood depth variable exists
-            if flood_var_name not in ds:
-                raise KeyError(f"Variable '{flood_var_name}' not found in the dataset.")
 
-            flood = ds_squeezed[flood_var_name]
+                # Find the first NetCDF file with "flood" in the filename
 
-            # Compute max flood depth lazily (parallelized)
-            flood_max = flood.max(dim="time")
-            flood_max = flood_max.rio.write_crs("EPSG:32637", inplace=True)       
-            flood_mask = flood_max.where(flood_max >= depth_threshold)
+                # Load the subgrid DEM this will be used to correct flood depth values to be relative to the local terrain rather than sea level.
+                subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
+                try:
+                    da_dep = rioxarray.open_rasterio(subgrid_dem_path).squeeze(dim="band", drop=True)
+                    da_dep.name = "DEM"
+                except Exception as e:
+                    print(f"Error loading raster: {e}")
 
-            # Trigger actual computation only at the end
-            flood_mask = flood_mask.compute()
+                '''
+                with rasterio.open(subgrid_dem_path) as src:
+                    
+                    data = src.read(1)  # read first band
+                    transform = src.transform
+                    crs = src.crs
+                    height, width = data.shape
+                    # Compute x and y coordinate arrays from affine transform
+                    x_coords = [transform * (i + 0.5, 0.5) for i in range(width)]
+                    y_coords = [transform * (0.5, j + 0.5) for j in range(height)]
+
+                    # x_coords and y_coords are (x, y) tuples; take the components
+                    x_coords = [x for x, y in x_coords]
+                    y_coords = [y for x, y in y_coords]
+
+                    # Build DataArray with CRS and transform metadata
+                    da_dep = xr.DataArray(
+                        data,
+                        dims=("y", "x"),
+                        coords={"x": x_coords, "y": y_coords},
+                        attrs={
+                            "crs": crs.to_string(),
+                            "transform": transform
+                        },
+                        name="DEM"
+                    )
+
+                    # Enable rioxarray spatial accessors (optional but recommended)
+                    da_dep = da_dep.rio.write_crs(crs, inplace=True)
+                    da_dep = da_dep.rio.write_transform(transform, inplace=True)
+                '''
             
-            #Write the crs to the dataArray
-            flood.rio.write_crs("EPSG:32637", inplace=True)
-
-            # Load the subgrid DEM
-            subgrid_dem_path = self.inputPathGrid + "/other/dep_subgrid.tif"
-            with rasterio.open(subgrid_dem_path) as src:
-                data = src.read(1)  # read first band
-                transform = src.transform
-                crs = src.crs
-                height, width = data.shape
-
-                # Compute x and y coordinate arrays from affine transform
-                x_coords = [transform * (i + 0.5, 0.5) for i in range(width)]
-                y_coords = [transform * (0.5, j + 0.5) for j in range(height)]
-
-                # x_coords and y_coords are (x, y) tuples; take the components
-                x_coords = [x for x, y in x_coords]
-                y_coords = [y for x, y in y_coords]
-
-                # Build DataArray with CRS and transform metadata
-                da_dep = xr.DataArray(
-                    data,
-                    dims=("y", "x"),
-                    coords={"x": x_coords, "y": y_coords},
-                    attrs={
-                        "crs": crs.to_string(),
-                        "transform": transform
-                    },
-                    name="DEM"
+                flood_masked = hydromt_sfincs.utils.downscale_floodmap(
+                    zsmax=flood_max,
+                    dep=da_dep,
+                    hmin=depth_threshold,
+                    gdf_mask = geo_admin,
+                    reproj_method = 'bilinear',
                 )
 
-                # Enable rioxarray spatial accessors (optional but recommended)
-                da_dep = da_dep.rio.write_crs(crs, inplace=True)
-                da_dep = da_dep.rio.write_transform(transform, inplace=True)
+                # Ensure CRS is set
+                src_crs = flood_masked.rio.crs or 'EPSG:32637'
+                flood_masked = flood_masked.rio.write_crs(src_crs)
 
-            # Downscale floodmap to subgrid resolution
-            flood_masked = hydromt_sfincs.utils.downscale_floodmap(
-                zsmax=flood,
-                dep=da_dep,
-                hmin=depth_threshold,
-                reproj_method = 'bilinear',
-            )
+                # Save to GeoTIFF
+                output_tif = self.outputPathGrid + '/flood_extent.tif'   
+                (
+                    flood_masked#.fillna(0.0)   ### fill NaN values with 0.0, otherwise you can remove this line
+                    .rio.reproject('EPSG:4326',resampling=Resampling.nearest)
+                    .rio.to_raster(output_tif)
+                ) 
 
-            data = np.nan_to_num(flood_masked.values, nan=0.0)
+                '''
+                data = np.nan_to_num(flood_masked.values, nan=0.0)
 
-            # Use georeferencing from the downscaled raster itself so bounds and shape stay consistent.
-            src_transform = flood_masked.rio.transform(recalc=True)
-            src_crs = flood_masked.rio.crs or 'EPSG:32637'
-            dst_crs = 'EPSG:4326'
+                # Use georeferencing from the downscaled raster itself so bounds and shape stay consistent.
+                src_transform = flood_masked.rio.transform(recalc=True)
+                src_crs = flood_masked.rio.crs or 'EPSG:32637'
+                dst_crs = 'EPSG:4326'
 
-            # Prepare destination transform and shape
-            src_bounds = rasterio.transform.array_bounds(data.shape[0], data.shape[1], src_transform)
-            dst_transform, width, height = calculate_default_transform(
-                src_crs, dst_crs, data.shape[1], data.shape[0], *src_bounds
-            )
+                # Prepare destination transform and shape
+                src_bounds = rasterio.transform.array_bounds(data.shape[0], data.shape[1], src_transform)
+                dst_transform, width, height = calculate_default_transform(
+                    src_crs, dst_crs, data.shape[1], data.shape[0], *src_bounds
+                )
 
-            # Prepare output array
-            dst_data = np.empty((height, width), dtype=data.dtype)
+                # Prepare output array
+                dst_data = np.empty((height, width), dtype=data.dtype)
 
-            # Reproject
-            reproject(
-                source=data,
-                destination=dst_data,
-                src_transform=src_transform,
-                src_crs=src_crs,
-                dst_transform=dst_transform,
-                dst_crs=dst_crs,
-                resampling=Resampling.nearest
-            )
+                # Reproject
+                reproject(
+                    source=data,
+                    destination=dst_data,
+                    src_transform=src_transform,
+                    src_crs=src_crs,
+                    dst_transform=dst_transform,
+                    dst_crs=dst_crs,
+                    resampling=Resampling.nearest
+                )
 
-            # Save to GeoTIFF
-            output_tif = self.outputPathGrid + '/flood_extent.tif'
+                # Save to GeoTIFF
+                output_tif = self.outputPathGrid + '/flood_extent.tif'
 
-            with rasterio.open(
-                output_tif,
-                'w',
-                driver='GTiff',
-                height=height,
-                width=width,
-                count=1,
-                dtype=dst_data.dtype,
-                crs=dst_crs,
-                transform=dst_transform
-            ) as dst:
-                dst.write(dst_data, 1)
+                with rasterio.open(
+                    output_tif,
+                    'w',
+                    driver='GTiff',
+                    height=height,
+                    width=width,
+                    count=1,
+                    dtype=dst_data.dtype,
+                    crs=dst_crs,
+                    transform=dst_transform
+                ) as dst:
+                    dst.write(dst_data, 1)
+                '''
 
         except FileNotFoundError:
             logging.warning(
@@ -488,34 +515,55 @@ class Extract:
         logging.info(f"start extracting wflow data for country {country}")   
 
         target_datetime = datetime.today()
-        flow_multiplier = 1 # Set multiplier for flow values, to simulate triggering of flood alerts
+
+        # Set multiplier for flow values, to simulate triggering of flood alerts
+        STATION_RENAME_MAP = {'dire_dawa': 'wflow_dire_dawa'}
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))
             flow_multiplier = self.settings.get_setting("discharge_multiplier")
+        else:
+            flow_multiplier = 1
 
         local_file_path = self.inputPathGrid + "/hydrology"
 
         try:
-            local_files = glob.glob(os.path.join(local_file_path, "*wflow*"))
-
-            # Sort files based on timestamp (latest first)
-            local_files.sort(reverse=True)
-
-            most_recent_forecast=local_file_path + '/' + os.path.basename(local_files[0])
-
-            ds = xr.open_dataset(most_recent_forecast)
+            wflow_files = sorted(
+                    glob.glob(os.path.join(local_file_path, "*wflow*")),
+                    reverse=True
+                )
+                
+            if not wflow_files:
+                raise FileNotFoundError(f"No wflow files found in {local_file_path}")
+            
+            # Load data
+            ds = xr.open_dataset(wflow_files[0])
             df = ds.to_dataframe().reset_index()
-            df['station_names'] = df['station_names'].str.decode('utf-8')
+            
+            # Decode and clean data
+            df['station_names'] = df['station_names'].str.decode('utf-8').str.lower()
+            df['station_id'] = df['station_id'].str.decode('utf-8')
+            
+            # Rename stations
+            for old_name, new_name in STATION_RENAME_MAP.items():
+                df['station_names'] = df['station_names'].str.replace(old_name, new_name, regex=False)
+            
+            # Calculate lead time
 
-            #station names have changed in the wflow model, so we need to update them here
-            # e.g., dire_dawa to wflow_dire_dawa    
-            df['station_names'] = df['station_names'].str.lower().str.replace('dire_dawa', 'wflow_dire_dawa', regex=False)
-            df['station_id'] = df['station_id'].str.decode('utf-8') 
-            df['delta'] = df['time'] - df['analysis_time']
-            df['lead_time'] = df['delta'].dt.total_seconds() / 3600  # Convert to hours 
-            df['lead_time'] = df['lead_time'].astype(int)
-            df['Q'] = df['Q'] * flow_multiplier  # Apply flow multiplier
+
+            df['lead_time'] = (
+                (df['time'] - df['analysis_time'])
+                .dt.total_seconds() 
+                / 3600
+            ).astype(int)  #             
+            
+            df['lead_time'] = df['lead_time'] + 1 # take the first lead time as 1 hour, not 0 hours. This is because the first lead time is the forecast for the next hour, not the current hour.
+
+           
+            
+            # Apply flow multiplier
+            df['Q'] = df['Q'] * flow_multiplier
+
 
             for admin_level in self.data.discharge_admin.adm_levels:
                 for data_unit in self.data.threshold_station.data_units:
@@ -523,8 +571,8 @@ class Extract:
                     st_name = data_unit.station_name
                     logging.info(f"Processing station: {st_name} for admin level {admin_level}")
                     
-                    for lead_time in [1, 2, 3, 6, 12]: 
-                        df_station = df.query("station_names == @st_name").query("lead_time <= @lead_time")
+                    for lead_time in [1, 2, 3]: #(df.lead_time.unique()):  
+                        df_station = df.query("station_names == @st_name")#.query("lead_time <= @lead_time") #currently we are NOT using the maximum value of the discharge for each lead time.
                         max_value =  float(np.nanmax(df_station['Q'].values))
                         self.data.discharge_station.upsert_data_unit(
                             DischargeStationDataUnit(
