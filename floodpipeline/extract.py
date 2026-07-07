@@ -518,26 +518,28 @@ class Extract:
 
         # Set multiplier for flow values, to simulate triggering of flood alerts
         STATION_RENAME_MAP = {'dire_dawa': 'wflow_dire_dawa'}
+        local_file_path = self.inputPathGrid + "/hydrology"
 
         if debug:
             target_datetime = (datetime.today() - timedelta(days=1))
             flow_multiplier = self.settings.get_setting("discharge_multiplier")
+            wflow_file = self.inputPathGrid + "/other/wflow_sen.nc"
+
         else:
             flow_multiplier = 1
-
-        local_file_path = self.inputPathGrid + "/hydrology"
-
-        try:
             wflow_files = sorted(
-                    glob.glob(os.path.join(local_file_path, "*wflow*")),
-                    reverse=True
+                glob.glob(os.path.join(local_file_path, "*wflow*")),
+                reverse=True
                 )
-                
+            wflow_file=wflow_files[0]               
             if not wflow_files:
-                raise FileNotFoundError(f"No wflow files found in {local_file_path}")
-            
+                raise FileNotFoundError(f"No wflow files found in {local_file_path}")           
+
+        
+
+        try:            
             # Load data
-            ds = xr.open_dataset(wflow_files[0])
+            ds = xr.open_dataset(wflow_file)
             df = ds.to_dataframe().reset_index()
             
             # Decode and clean data
