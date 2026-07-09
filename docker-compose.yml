@@ -7,4 +7,6 @@ services:
     container_name: ibf_flash_flood_pipeline
     env_file:
       - .env
+    #volumes:
+    #  - "./data:/app/data"    
     command: python flood_pipeline.py --country ETH --prepare --extract --forecast --send

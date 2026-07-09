@@ -30,15 +30,20 @@ RUN set -ex apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
 # add credentials and install drought pipeline
-WORKDIR .
+#WORKDIR .
+
+WORKDIR /app
 COPY pyproject.toml poetry.lock /
 RUN poetry config virtualenvs.create false
 RUN poetry install --no-root --no-interaction
-COPY floodpipeline /floodpipeline
-COPY config /config
-# Create the target directories inside the container
-RUN mkdir -p /data/input /data/output 
 
-COPY data /data
-COPY "flood_pipeline.py" .
+COPY floodpipeline floodpipeline
+COPY config config
+COPY flood_pipeline.py flood_pipeline.py
+
+# Create the target directories inside the container
+#RUN mkdir -p /data/input /data/output 
+
+COPY data ./data
+
  

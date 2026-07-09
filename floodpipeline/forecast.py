@@ -19,7 +19,8 @@ from rasterio.merge import merge
 from rasterio.mask import mask
 from rasterio.features import shapes
 import shutil
-
+import json
+import geopandas as gpd
 
 def merge_rasters(raster_filepaths: list) -> tuple:
     """Merge rasters into a single one, return the merged raster and its metadata"""
@@ -274,58 +275,37 @@ class Forecast:
 
     def __compute_flood_extent(self):
         """Compute flood extent raster"""
-        # get country-wide flood extent rasters
-        country = self.data.forecast_admin.country
-        flood_rasters = {}
-        output_dir = self.input_data_path+'/hydrology'
+        adm_lvl = self.data.forecast_admin.adm_levels[-1]
 
-        # Loop through return periods and copy the file 
-        # Here we are going to use a floodextent map developed for the actual event but keepinng the retun period logic 
-        # please replace this as it might not be needed
-        for rp in [5, 10, 20, 50, 75, 100, 200, 500]:
-            output_filename = f"flood_map_{country.upper()}_RP{rp}.tif"
-            output_path = os.path.join(output_dir, output_filename)
-            shutil.copyfile(self.flood_extent_raster, output_path)
-
-            flood_rasters[rp] = output_path
-
-        # create empty raster
+        # create empty raster from the flood extent produced by prepare_wflow_data
         empty_raster = self.flood_extent_raster.replace(".tif", "_empty.tif")
-        with rasterio.open(list(flood_rasters.values())[0]) as src:
+        with rasterio.open(self.flood_extent_raster) as src:
             flood_raster_data = src.read()
-            flood_raster_data = np.empty(flood_raster_data.shape)
+            flood_raster_data = np.zeros(flood_raster_data.shape, dtype=flood_raster_data.dtype)
             flood_raster_meta = src.meta.copy()
             flood_raster_meta["compress"] = "lzw"
             with rasterio.open(empty_raster, "w", **flood_raster_meta) as dest:
                 dest.write(flood_raster_data)
 
-        adm_lvl = self.data.forecast_admin.adm_levels[-1]
-
         # get adm boundaries
-        gdf_adm = self.load.get_adm_boundaries(
-            self.data.forecast_admin.country, adm_lvl
-        )
+        gdf_adm = self.load.get_adm_boundaries(self.data.forecast_admin.country, adm_lvl )
+        gdf_adm = gdf_adm[gdf_adm["adm3_pcode"].str.startswith("ET15")] # limit the ablaysis to Diredawa
+
+ 
         gdf_adm.index = gdf_adm[f"adm{adm_lvl}_pcode"]
+
         for lead_time in self.data.forecast_admin.get_lead_times():
-            raster_lead_time = self.flood_extent_raster.replace(
-                ".tif", f"_{lead_time}.tif"
-            )
+            raster_lead_time = self.flood_extent_raster.replace(".tif", f"_{lead_time}.tif" )
+
             # calculate flood extent for each triggered admin division
             flood_rasters_admin_div = []
-            for forecast_data_unit in self.data.forecast_admin.get_data_units(
-                lead_time=lead_time, adm_level=adm_lvl
-            ):
+            for forecast_data_unit in self.data.forecast_admin.get_data_units( lead_time=lead_time, adm_level=adm_lvl):
                 if forecast_data_unit.triggered:
                     adm_bounds = gdf_adm.loc[forecast_data_unit.pcode, "geometry"]
-                    rp = forecast_data_unit.return_period
 
-                    # if return period is not available, use the smallest available
-                    if rp not in flood_rasters.keys():
-                        rp = min(flood_rasters.keys())
-
-                    # clip flood extent raster with admin division boundaries
+                    # clip the flood extent raster with admin division boundaries
                     flood_raster_data, flood_raster_meta = clip_raster(
-                        flood_rasters[rp], [adm_bounds]
+                        self.flood_extent_raster, [adm_bounds]
                     )
                     # save the clipped raster
                     flood_raster_admin_div = (
@@ -339,19 +319,21 @@ class Forecast:
 
             # merge flood extents of each triggered admin division
             if len(flood_rasters_admin_div) > 0:
-                flood_rasters_admin_div.append(empty_raster)
+                #flood_rasters_admin_div.append(empty_raster) # un comment this if you want to keep the empty raster in the merged raster, but it will make the merged raster bigger than it should be
                 flood_raster_data, flood_raster_meta = merge_rasters(
                     flood_rasters_admin_div
                 )
                 flood_raster_meta["compress"] = "lzw"
                 with rasterio.open(raster_lead_time, "w", **flood_raster_meta) as dest:
                     dest.write(flood_raster_data)
+                '''    
                 for file in flood_rasters_admin_div:
                     if file != empty_raster:
                         try:
                             os.remove(file)
                         except FileNotFoundError:
                             pass
+                '''
             else:
                 shutil.copy(empty_raster, raster_lead_time)
 
@@ -395,15 +377,29 @@ class Forecast:
         """Compute affected population given a flood extent"""
 
         # calculate affected population raster
+        import geopandas as gpd
         self.__compute_affected_pop_raster()
 
         # calculate affected population per admin division
-        for adm_lvl in self.data.forecast_admin.adm_levels:
+        results_aff_pop = {}
+        results_pop = {}
+        for adm_lvl in [3]:#self.data.forecast_admin.adm_levels:
             # get adm boundaries
-            gdf_adm = self.load.get_adm_boundaries(
-                self.data.forecast_admin.country, adm_lvl
-            )
+            #gdf_adm = self.load.get_adm_boundaries(self.data.forecast_admin.country, adm_lvl )
+
+            inputPathadmin = self.input_data_path + "/other/dre_dawa.geojson"  # the boundary file coming from API was not working not sure why, so I used the one from the input_data/other folder
+
+            gdf_adm =  gpd.read_file(inputPathadmin)
+            gdf_adm.columns = gdf_adm.columns.str.strip().str.lower()
+            gdf_adm= gdf_adm[['geometry',f"adm{adm_lvl}_pcode"]]
+            #gdf_adm['adm3_pcode'] = gdf_adm['adm3_pcode']
+
+            gdf_adm = gdf_adm[gdf_adm[f"adm{adm_lvl}_pcode"].str.startswith("ET15", na=False)] # limit the ablaysis to Diredawa
+            
+
             gdf_aff_pop, gdf_pop = pd.DataFrame(), pd.DataFrame()
+     
+
 
             for lead_time in self.data.forecast_admin.get_lead_times():
                 aff_pop_raster_lead_time = self.aff_pop_raster.replace(
@@ -412,9 +408,13 @@ class Forecast:
                 if os.path.exists(aff_pop_raster_lead_time):
                     # perform zonal statistics on affected population raster
                     with rasterio.open(aff_pop_raster_lead_time) as src:
+                        raster_crs = src.crs
                         raster_array = src.read(1)
                         raster_array[raster_array < 0.0] = 0.0
                         transform = src.transform
+
+                    if gdf_adm.crs != raster_crs:
+                        gdf_adm = gdf_adm.to_crs(raster_crs)
 
                     stats = zonal_stats(
                         gdf_adm,
@@ -422,10 +422,14 @@ class Forecast:
                         affine=transform,
                         stats=["sum"],
                         all_touched=True,
-                        nodata=0.0,
+                        nodata=np.nan,
                     )
-                    gdf_aff_pop = pd.concat([gdf_adm, pd.DataFrame(stats)], axis=1)
+                    #gdf_aff_pop = pd.concat([gdf_adm, pd.DataFrame(stats)], axis=1)
+                    #gdf_aff_pop.index = gdf_aff_pop[f"adm{adm_lvl}_pcode"]
+
+                    gdf_aff_pop = pd.concat([gdf_adm.drop(columns="geometry", errors="ignore"), pd.DataFrame(stats)], axis=1)
                     gdf_aff_pop.index = gdf_aff_pop[f"adm{adm_lvl}_pcode"]
+             
 
                     # perform zonal statistics on population density raster (to compute % aff pop)
                     with rasterio.open(self.pop_raster) as src:
@@ -438,34 +442,41 @@ class Forecast:
                         affine=transform,
                         stats=["sum"],
                         all_touched=True,
-                        nodata=0.0,
+                        nodata=np.nan,
                     )
-                    gdf_pop = pd.concat([gdf_adm, pd.DataFrame(stats)], axis=1)
+                    #gdf_pop = pd.concat([gdf_adm, pd.DataFrame(stats)], axis=1)
+                    #gdf_pop.index = gdf_pop[f"adm{adm_lvl}_pcode"]
+
+                    gdf_pop = pd.concat([gdf_adm.drop(columns="geometry", errors="ignore"), pd.DataFrame(stats)], axis=1)
                     gdf_pop.index = gdf_pop[f"adm{adm_lvl}_pcode"]
+                  
 
-                # add affected population to forecast data units
-                for forecast_data_unit in self.data.forecast_admin.get_data_units(
-                    adm_level=adm_lvl, lead_time=lead_time
-                ):
-                    if forecast_data_unit.triggered:
-                        try:
-                            pop_affected = int(
-                                gdf_aff_pop.loc[forecast_data_unit.pcode, "sum"]
-                            )
-                        except (ValueError, TypeError, KeyError):
-                            pop_affected = 0
-                        forecast_data_unit.pop_affected = pop_affected
-                        try:
-                            forecast_data_unit.pop_affected_perc = (
-                                float(
-                                    pop_affected
-                                    / gdf_pop.loc[forecast_data_unit.pcode, "sum"]
+                    # add affected population to forecast data units
+                    for forecast_data_unit in self.data.forecast_admin.get_data_units(
+                        adm_level=adm_lvl, lead_time=lead_time
+                    ):
+                        if forecast_data_unit.triggered:
+                            try:
+                                pop_affected = int(
+                                    gdf_aff_pop.loc[forecast_data_unit.pcode, "sum"]
                                 )
-                                * 100.0
-                            )
+                            except (ValueError, TypeError, KeyError):
+                                pop_affected = 0
+                            forecast_data_unit.pop_affected = pop_affected
+                            try:
+                                forecast_data_unit.pop_affected_perc = (
+                                    float(
+                                        pop_affected
+                                        / gdf_pop.loc[forecast_data_unit.pcode, "sum"]
+                                    )
+                                    * 100.0
+                                )
 
-                        except (ValueError, TypeError, KeyError):
-                            forecast_data_unit.pop_affected_perc = 0.0
+                            except (ValueError, TypeError, KeyError):
+                                forecast_data_unit.pop_affected_perc = 0.0
+
+            #
+
 
     def compute_forecast_station(self):
         """

@@ -21,7 +21,8 @@ class StationDataUnit:
         self.station_code: str = kwargs.get("station_code")
         self.station_name: str = kwargs.get("station_name")
         self.lat: float = kwargs.get("lat")
-        self.lon: float = kwargs.get("lon")    
+        self.lon: float = kwargs.get("lon")
+        self.lead_time: int = kwargs.get("lead_time")  
         self.pcodes: dict = kwargs.get(
             "pcodes"
         )  # pcodes of associated administrative divisions
@@ -63,14 +64,14 @@ class DischargeStationDataUnit(StationDataUnit):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.lead_time: int = kwargs.get("lead_time")
+        #self.lead_time: int = kwargs.get("lead_time")
         self.discharge_ensemble: List[float] = kwargs.get("discharge_ensemble", None)
         self.discharge_mean: float = kwargs.get("discharge_mean", None)
-        self.pcodes: dict = kwargs.get("pcodes", {})
-        self.lat: float = kwargs.get("lat", None)
-        self.lon: float = kwargs.get("lon", None)   
-        self.station_code: str = kwargs.get("station_code", None)
-        self.station_name: str = kwargs.get("station_name", None)
+        #self.pcodes: dict = kwargs.get("pcodes", {})
+        #self.lat: float = kwargs.get("lat", None)
+        #self.lon: float = kwargs.get("lon", None)   
+        #self.station_code: str = kwargs.get("station_code", None)
+        #self.station_name: str = kwargs.get("station_name", None)
         if hasattr(self.discharge_ensemble, "__iter__"):
             self.compute_mean()
 
@@ -221,6 +222,24 @@ class ThresholdStationDataUnit(StationDataUnit):
             raise ValueError(f"Return period {return_period} not found")
         else:
             return threshold["threshold_value"]
+        
+    def get_data_units(self, lead_time: int = None, adm_level: int = None):
+        """Return list of data units filtered by lead time and/or admin level"""
+        if not self.data_units:
+            raise ValueError("Data units not found")
+        if lead_time is not None and adm_level is not None:
+            return list(
+                filter(
+                    lambda x: x.lead_time == lead_time and x.adm_level == adm_level,
+                    self.data_units,
+                )
+            )
+        elif lead_time is not None:
+            return list(filter(lambda x: x.lead_time == lead_time, self.data_units))
+        elif adm_level is not None:
+            return list(filter(lambda x: x.adm_level == adm_level, self.data_units))
+        else:
+            return self.data_units
 
 
 class AdminDataSet:
@@ -404,7 +423,7 @@ class StationDataSet:
                     and x.lead_time == lead_time,
                     self.data_units,
                 ),
-                None,
+                None, 
             )
         else:
             bdu = next(
@@ -455,6 +474,10 @@ class StationDataSet:
         return list(
             set([x.station_code for x in self.data_units if hasattr(x, "station_code")])
         )
+    
+
+
+ 
 
 
 class PipelineDataSets:
