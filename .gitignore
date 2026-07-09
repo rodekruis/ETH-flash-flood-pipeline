@@ -17,6 +17,9 @@
 
 # Local data files
 data/*
+!data/input/
+data/input/*
+!data/input/other/
 
 
 # Generated files
