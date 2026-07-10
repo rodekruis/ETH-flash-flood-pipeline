@@ -77,7 +77,15 @@ You can modify the `command` section in the `docker-compose.yml` file to change 
 ---
 
 
-## Triggering Model Run for Drought Scenarios
+## Triggering Model Run for flooding Scenarios
+ To test pipeline with trigger event run the pipeline in one of the above option with the flag --debug 
+ Sample discharge and flood extent data used to simulate a flood scenario are available in the input/other folder:
+
+Flood extent: 100yr_return_period_flood_5m.tif
+Discharge: wflow_sen.nc
+
+To test the pipeline with a trigger event, run the pipeline using any of the methods described above and include the --debug flag.
+
 
 ---
 
