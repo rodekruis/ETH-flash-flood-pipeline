@@ -544,14 +544,15 @@ class Load:
         logging.info("Sending data to IBF API for country  1")
 
         # START EVENT LOOP
-
-
-
-    
-
-        
- 
-        
+        # ---------------------------------------------------------------------
+        # initialise the event variables BEFORE the station loop.
+        # They are only assigned inside the "trigger" branch below. If no
+        # station triggers, every iteration hits `continue` and these names are
+        # never bound -> the exposure block would raise NameError. Pre-setting
+        # them to None gives us a clean "did anything trigger?" check afterwards.
+        # ---------------------------------------------------------------------
+        event_name, event_type = None, None
+        lead_time_event=None
 
         for station_code in forecast_station_data.get_station_codes():
             #logging.info(f"identifying events ata to IBF API for country  station {station_code}")
@@ -584,117 +585,127 @@ class Load:
                     trigger_events[key] = value
 
 
-            if not trigger_events:
-                continue
+            if trigger_events:
+                events = dict(sorted(trigger_events.items()))
 
-            events = dict(sorted(trigger_events.items()))
+                lead_time_event = min(events.keys())
+                event_type = events[lead_time_event]
 
-            lead_time_event = min(events.keys())
-            event_type = events[lead_time_event]
-
-            # set as alert if lead time is greater than trigger_on_lead_time
-            if lead_time_event > trigger_on_lead_time and event_type == "trigger":
-                event_type = "alert"
+                # set as alert if lead time is greater than trigger_on_lead_time
+                if lead_time_event > trigger_on_lead_time and event_type == "trigger":
+                    event_type = "alert"
+                event_name = "Dire Dawa urban"
 
             # currently this flash flood is only enabled in one admin-area
             # manually set event name as hardcoded admin-area name to follow existing flash flood logic
-            event_name = "Dire Dawa urban"
+            #event_name = "Dire Dawa urban"
 
-            if event_name == "" or event_name == "None" or event_name == "Na":
-                event_name = str(station_code)
+            #if event_name == "" or event_name == "None" or event_name == "Na":
+            #    event_name = str(station_code)
 
             logging.info(
                 f"event {event_name}, type '{event_type}', lead time {lead_time_event}"
+            )      
+
+
+        # send exposure data: admin-area-dynamic-data/exposure
+
+        if lead_time_event is not None:
+            #upload exposure data for the first lead time event only, if multiple events are triggered, we will upload only the first one
+            logging.info(
+                f" events found for country {country} at {upload_time}, sending  exposure data"
             )
-        
 
+            indicators = [
+                "population_affected",
+                #"population_affected_percentage",
+                #"alert_threshold",
+                "forecast_trigger",
+                "forecast_severity",
+            ]
 
-            # send exposure data: admin-area-dynamic-data/exposure
-        indicators = [
-            "population_affected",
-            #"population_affected_percentage",
-            #"alert_threshold",
-            "forecast_trigger",
-            "forecast_severity",
-        ]
+            for indicator in indicators:
+                adm_level = 3 
+                exposure_pcodes = []
+                for station_code in forecast_station_data.get_station_codes():
+                    logging.info(f"Sending data to IBF API for country  station {station_code}")
 
-        for indicator in indicators:
-            adm_level = 3 
-            exposure_pcodes = []
-            for station_code in forecast_station_data.get_station_codes():
-                logging.info(f"Sending data to IBF API for country  station {station_code}")
-
-                forecast_station = forecast_station_data.get_data_unit(
-                    station_code, lead_time_event
-                )
-                threshold_station = threshold_station_data.get_data_unit(station_code)
-                
-                #for adm_level in [3]:#adm_levels: #forecast_station.pcodes.keys(): uploading data only for admin level 3
- 
-                #logging.info(f"Sending data to IBF API for country {country} indicator {indicator} admin level {forecast_station.pcodes}")
-                for pcode in forecast_station.pcodes: # check the database on cosmos for context pcodes is a dictionary 
-                    logging.info(f"=============with pcode {pcode}==================")
-                    forecast_admin = forecast_data.get_data_unit( pcode, lead_time_event )
-                    amount = None
-                    if indicator == "population_affected":
-                        amount = forecast_admin.pop_affected
-                        #amount = lookup.get((str(adm_level), str(lead_time_event), pcode), 0)
-                    elif indicator == "population_affected_percentage":
-                        amount = forecast_admin.pop_affected_perc
-                    elif indicator == "forecast_severity":
-                        amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
-                    elif indicator == "forecast_trigger":
-                        amount = forecast_trigger_status(
-                            triggered=(True if event_type == "trigger" else False),
-                            #triggered= (forecast_admin.triggered > 0),# True if event_type == "trigger" else False   ),
-                            trigger_class=pipeline_will_trigger_portal,
-                            )
-                    #elif indicator == "alert_threshold":
-                    #    amount = alert_class_to_threshold(alert_class=forecast_admin.alert_class, triggered=(True if event_type == "trigger" else False),)
-                    exposure_pcodes.append(
-                        {"placeCode": pcode, "amount": amount}
+                    forecast_station = forecast_station_data.get_data_unit(
+                        station_code, lead_time_event
                     )
-                    processed_pcodes.append(pcode)
-            body = {
-                "countryCodeISO3": country,
-                "leadTime": f"{lead_time_event}-hour",
-                "dynamicIndicator": indicator,
-                "adminLevel": int(adm_level),
-                "exposurePlaceCodes": exposure_pcodes,
-                "disasterType": disasterType,
-                "eventName": event_name,
-                "date": upload_time,
-            }
-            logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour admin level {adm_level} event name {station_code}")
+                    threshold_station = threshold_station_data.get_data_unit(station_code)
+                    
+                    #for adm_level in [3]:#adm_levels: #forecast_station.pcodes.keys(): uploading data only for admin level 3
+    
+                    #logging.info(f"Sending data to IBF API for country {country} indicator {indicator} admin level {forecast_station.pcodes}")
+                    for pcode in forecast_station.pcodes: # check the database on cosmos for context pcodes is a dictionary 
+                        logging.info(f"=============with pcode {pcode}==================")
+                        forecast_admin = forecast_data.get_data_unit( pcode, lead_time_event )
+                        amount = None
+                        if indicator == "population_affected":
+                            amount = forecast_admin.pop_affected
+                            #amount = lookup.get((str(adm_level), str(lead_time_event), pcode), 0)
+                        elif indicator == "population_affected_percentage":
+                            amount = forecast_admin.pop_affected_perc
+                        elif indicator == "forecast_severity":
+                            amount = (1 if forecast_admin.triggered else 0) #forecast_admin.triggered # ( 1 if event_type == "trigger" else 0 )
+                        elif indicator == "forecast_trigger":
+                            amount = forecast_trigger_status(
+                                triggered=(True if event_type == "trigger" else False),
+                                #triggered= (forecast_admin.triggered > 0),# True if event_type == "trigger" else False   ),
+                                trigger_class=pipeline_will_trigger_portal,
+                                )
+                        #elif indicator == "alert_threshold":
+                        #    amount = alert_class_to_threshold(alert_class=forecast_admin.alert_class, triggered=(True if event_type == "trigger" else False),)
+                        exposure_pcodes.append(
+                            {"placeCode": pcode, "amount": amount}
+                        )
+                        processed_pcodes.append(pcode)
+                body = {
+                    "countryCodeISO3": country,
+                    "leadTime": f"{lead_time_event}-hour",
+                    "dynamicIndicator": indicator,
+                    "adminLevel": int(adm_level),
+                    "exposurePlaceCodes": exposure_pcodes,
+                    "disasterType": disasterType,
+                    "eventName": event_name,
+                    "date": upload_time,
+                }
+                logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour admin level {adm_level} event name {station_code}")
 
-            statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
-            statsPath=statsPath.replace("extent", f"{indicator}")
+                statsPath=flood_extent.replace(".tif", f"_{event_name}_{lead_time_event}-hour_{country}_{adm_level}.json" )
+                statsPath=statsPath.replace("extent", f"{indicator}")
 
-            with open(statsPath, 'w') as fp:
-                json.dump(body, fp)
+                with open(statsPath, 'w') as fp:
+                    json.dump(body, fp)
 
-            self.ibf_api_post_request( "admin-area-dynamic-data/exposure", body=body)
-                
-            processed_pcodes = list(set(processed_pcodes))
-            logging.info(f"+++++++++++++Processed pcodes: {processed_pcodes}")
+                self.ibf_api_post_request( "admin-area-dynamic-data/exposure", body=body)
+                    
+                processed_pcodes = list(set(processed_pcodes))
+                logging.info(f"+++++++++++++Processed pcodes: {processed_pcodes}")
 
             # GloFAS station data: point-data/dynamic
             # 1 call per alert/triggered station, and 1 overall (to same endpoint) for all other stations
-            if event_type != "none":
-                station_forecasts = {
-                    "forecastLevel": [],
-                    "eapAlertClass": [],
-                    "forecastReturnPeriod": [],
-                    "triggerLevel": [],
-                    "water-level": [],
-                    "water-level-reference": [],
-                    "water-level-previous": [],
-                    "water-level-alert-level":[],
-                }
 
+            station_forecasts = {
+                "forecastLevel": [],
+                "eapAlertClass": [],
+                "forecastReturnPeriod": [],
+                "triggerLevel": [],
+                "water-level": [],
+                "water-level-reference": [],
+                "water-level-previous": [],
+                "water-level-alert-level":[],
+            }
+
+            for station_code in forecast_station_data.get_station_codes():                                    
+                forecast_station = forecast_station_data.get_data_unit(
+                        station_code, lead_time_event )
+                threshold_station = threshold_station_data.get_data_unit(station_code)
                 discharge_station = discharge_station_data.get_data_unit(
                     station_code, lead_time_event
                 )
+
                 for indicator in station_forecasts.keys():
                     value = None
                     if indicator == "forecastLevel":
@@ -735,53 +746,53 @@ class Load:
 
                     station_data = {"fid": station_code[-1], "value": value}
                     station_forecasts[indicator].append(station_data)
-                    body = {
-                        "countryCodeISO3": country,
-                        "leadTime": f"{lead_time_event}-hour",
-                        "key": indicator,
-                        "dynamicPointData": station_forecasts[indicator],
-                        "pointDataCategory": "gauges",
-                        "disasterType": disasterType,
-                        "date": upload_time,
-                    }
-                    #self.ibf_api_post_request("point-data/dynamic", body=body) # commented out to avoid sending station data for each event, instead we send all other stations at the end of the function
-                    logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour station {station_code}")
+                body = {
+                    "countryCodeISO3": country,
+                    "leadTime": f"{lead_time_event}-hour",
+                    "key": indicator,
+                    "dynamicPointData": station_forecasts[indicator],
+                    "pointDataCategory": "gauges",
+                    "disasterType": disasterType,
+                    "date": upload_time,
+                }
+                #self.ibf_api_post_request("point-data/dynamic", body=body) # commented out to avoid sending station data for each event, instead we send all other stations at the end of the function
+                #logging.info(f"Sending data to IBF API for country {country} indicator {indicator}  lead time {lead_time_event}-hour station {station_code}")
 
-                    statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
-                    statsPath=statsPath.replace("extent", f"{indicator}")
+                statsPath=flood_extent.replace(".tif", f"_{lead_time_event}-hour_{country}.json" )
+                statsPath=statsPath.replace("extent", f"{indicator}")
 
-                    with open(statsPath, 'w') as fp:
-                        json.dump(body, fp)
+                with open(statsPath, 'w') as fp:
+                    json.dump(body, fp)
 
                 processed_stations.append(station_code)
 
-        # END OF EVENT LOOP
-        ###############################################################################################################
+            # END OF EVENT LOOP
+            ###############################################################################################################
 
-        # flood extent raster: admin-area-dynamic-data/raster/floods
-        self.rasters_sent = []
-        logging.info("Sending data to IBF API for country  no event")
-        for lead_time in [1,2,3]: # range(0, 8):
-            flood_extent_new = flood_extent.replace(
-                ".tif", f"_{lead_time}-hour_{country}.tif"
-            )
-            if lead_time in triggered_lead_times:
-                shutil.copy(
-                    flood_extent.replace(".tif", f"_{lead_time}.tif"), flood_extent_new
+            # flood extent raster: admin-area-dynamic-data/raster/floods
+            self.rasters_sent = []
+            logging.info("Sending data to IBF API for country  no event")
+            for lead_time in [1,2,3]: # range(0, 8):
+                flood_extent_new = flood_extent.replace(
+                    ".tif", f"_{lead_time}-hour_{country}.tif"
                 )
-            else:
-                shutil.copy(
-                    flood_extent.replace(".tif", f"_empty.tif"),
-                    flood_extent_new,
+                if lead_time in triggered_lead_times:
+                    shutil.copy(
+                        flood_extent.replace(".tif", f"_{lead_time}.tif"), flood_extent_new
+                    )
+                else:
+                    shutil.copy(
+                        flood_extent.replace(".tif", f"_empty.tif"),
+                        flood_extent_new,
+                    )
+                self.rasters_sent.append(flood_extent_new)
+                files = {"file": open(flood_extent_new, "rb")}
+                self.ibf_api_post_request(
+                    "admin-area-dynamic-data/raster/floods", files=files
                 )
-            self.rasters_sent.append(flood_extent_new)
-            files = {"file": open(flood_extent_new, "rb")}
-            self.ibf_api_post_request(
-                "admin-area-dynamic-data/raster/floods", files=files
-            )
-
+        else:
         # send empty exposure data
-        if len(processed_pcodes) == 0:
+        #if len(processed_pcodes) == 0:
             indicators = [
                 "population_affected",
                 #"population_affected_percentage",
@@ -790,40 +801,40 @@ class Load:
                 "forecast_severity",
             ]
             for indicator in indicators:
-                for adm_level in forecast_data.adm_levels:
-                    exposure_pcodes = []
-                    for pcode in forecast_data.get_pcodes(adm_level=adm_level):
-                        if pcode not in processed_pcodes:
-                            amount = None
-                            if indicator == "population_affected":
-                                amount = 0
-                            elif indicator == "population_affected_percentage":
-                                amount = 0.0
-                            elif indicator == "forecast_trigger":
-                                amount = 0
-                            elif indicator == "forecast_severity":
-                                amount = 0
-                            elif indicator == "alert_threshold":
-                                amount = 0.0
-                            exposure_pcodes.append(
-                                {"placeCode": pcode, "amount": amount}
-                            )
+                #for adm_level in forecast_data.adm_levels:
+                exposure_pcodes = []
+                for pcode in forecast_data.get_pcodes(adm_level=3):
+                    if pcode not in processed_pcodes:
+                        amount = None
+                        if indicator == "population_affected":
+                            amount = 0
+                        elif indicator == "population_affected_percentage":
+                            amount = 0.0
+                        elif indicator == "forecast_trigger":
+                            amount = 0
+                        elif indicator == "forecast_severity":
+                            amount = 0
+                        elif indicator == "alert_threshold":
+                            amount = 0.0
+                        exposure_pcodes.append(
+                            {"placeCode": pcode, "amount": amount}
+                        )
 
-                    logging.info(f"Sending data to IBF API for country  no data indicator {indicator}")
-                    body = {
-                        "countryCodeISO3": country,
-                        "leadTime": "1-hour",  # this is a specific check IBF uses to establish no-trigger
-                        "dynamicIndicator": indicator,
-                        "adminLevel": adm_level,
-                        "exposurePlaceCodes": exposure_pcodes,
-                        "disasterType": disasterType,
-                        "eventName": None,  # this is a specific check IBF uses to establish no-trigger
-                        "date": upload_time,
-                    }
-                    self.ibf_api_post_request(
-                        "admin-area-dynamic-data/exposure", body=body
-                    )
-                    logging.info(f"finished Sending data to IBF API for country  no data indicator {indicator}")
+                logging.info(f"Sending data to IBF API for {country}  no data indicator {indicator}")
+                body = {
+                    "countryCodeISO3": country,
+                    "leadTime": "1-hour",  # this is a specific check IBF uses to establish no-trigger
+                    "dynamicIndicator": indicator,
+                    "adminLevel": 3,
+                    "exposurePlaceCodes": exposure_pcodes,
+                    "disasterType": disasterType,
+                    "eventName": None,  # this is a specific check IBF uses to establish no-trigger
+                    "date": upload_time,
+                }
+                self.ibf_api_post_request(
+                    "admin-area-dynamic-data/exposure", body=body
+                )
+                logging.info(f"finished Sending data to IBF API for {country}  no data indicator {indicator}")
 
         # send GloFAS station data for all other stations
         station_forecasts = {
@@ -868,8 +879,8 @@ class Load:
                 "disasterType": disasterType,
                 "date": upload_time,
             }
-            self.ibf_api_post_request("point-data/dynamic", body=body)
-            logging.info(f"finished Sending guage data to IBF API for country  no data indicator {indicator}")
+            #self.ibf_api_post_request("point-data/dynamic", body=body)
+            #logging.info(f"finished Sending guage data to IBF API for country  no data indicator {indicator}")
 
         # send notification
         body = {
@@ -879,7 +890,6 @@ class Load:
         }
         self.ibf_api_post_request("events/process", body=body)
  
-
     def save_pipeline_data(
         self, data_type: str, dataset: AdminDataSet, replace_country: bool = False
     ):
