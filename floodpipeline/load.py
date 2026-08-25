@@ -306,7 +306,6 @@ class Load:
         try:
             ftps.cwd(folder_path)
             files = ftps.nlst()
-            print('files: ', files)
 
             if not files:
                 logging.warning("No files found in directory.")
@@ -323,7 +322,6 @@ class Load:
                 now_files = [f for f in files if "wflow" in f]
                 fname_annex=["floodmap","wflow"]
                 files_dict={"floodmap":obs_files,"wflow":now_files}
-                print('files_dict: ', files_dict)
             else:
                 logging.error("Correct directory should be specified to find files.")
                 return
