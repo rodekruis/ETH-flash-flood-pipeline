@@ -327,7 +327,7 @@ class Extract:
                         )   
                 logging.info("finished extracting rainfall data")
             else:
-                logging.error("No NetCDF file with 'Nowcast_rain' in the name found.")
+                logging.warning("No NetCDF file with 'Nowcast_rain' in the name found.")
 
 
     def prepare_wflow_data(self, country: str = None, debug: bool = False):
