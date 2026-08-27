@@ -19,7 +19,6 @@ from rasterio.merge import merge
 from rasterio.mask import mask
 from rasterio.features import shapes
 import shutil
-import json
 import geopandas as gpd
 
 def merge_rasters(raster_filepaths: list) -> tuple:
@@ -377,7 +376,6 @@ class Forecast:
         """Compute affected population given a flood extent"""
 
         # calculate affected population raster
-        import geopandas as gpd
         self.__compute_affected_pop_raster()
 
         # calculate affected population per admin division
